@@ -11,7 +11,7 @@ from tqdm import tqdm
 
 
 # ── 설정 ─────────────────────────────────────────────
-BASE_DIR    = Path("C:/lecture/NOLIT")
+BASE_DIR = Path(r"D:\project\Nolit\notebooks")
 DATA_DIR    = BASE_DIR / "data"
 ENV_PATH    = BASE_DIR / ".env"
 
@@ -46,66 +46,60 @@ texts = [truncate_text(t) for t in texts]
 
 
 # ── 3. 체크포인트 로드 (이어하기) ────────────────────
-start_batch = 0
-all_embeddings = []
+CKPT_DIR = DATA_DIR / "ckpt_chunks"
+CKPT_DIR.mkdir(exist_ok=True)
 
-if CKPT_PATH.exists():
-    all_embeddings = np.load(str(CKPT_PATH), allow_pickle=True).tolist()
-    start_batch = len(all_embeddings) // BATCH_SIZE
-    print(f"[체크포인트 복원] {len(all_embeddings):,}개 → {start_batch}번 배치부터 재개")
-else:
-    print("[체크포인트 없음] 처음부터 시작")
+# 저장된 청크 파일 목록 확인
+saved_chunks = sorted(CKPT_DIR.glob("chunk_*.npy"))
+start_idx = len(saved_chunks) * 1000  # 청크당 1000개
+print(f"[체크포인트 복원] 청크 {len(saved_chunks)}개 → {start_idx:,}번부터 재개")
 
 
 # ── 4. 임베딩 생성 ────────────────────────────────────
 start = time.time()
-total_batches = (len(texts) + BATCH_SIZE - 1) // BATCH_SIZE
+total_batches = (len(texts) + BATCH_SIZE - 1) // BATCH_SIZE  # ← 이거 추가
+chunk_embeddings = []  # 현재 청크 임시 저장
+chunk_idx = len(saved_chunks)
 
-for i in tqdm(range(start_batch, total_batches), desc="임베딩 중", initial=start_batch, total=total_batches):
+for i in tqdm(range(start_idx // BATCH_SIZE, total_batches), desc="임베딩 중"):
     batch = texts[i * BATCH_SIZE: (i + 1) * BATCH_SIZE]
 
     while True:
         try:
-            response = openai.embeddings.create(
-                input=batch,
-                model=EMBED_MODEL,
-            )
-            batch_embeddings = [item.embedding for item in response.data]
-            all_embeddings.extend(batch_embeddings)
+            response = openai.embeddings.create(input=batch, model=EMBED_MODEL)
+            chunk_embeddings.extend([item.embedding for item in response.data])
             time.sleep(0.5)
             break
         except openai.RateLimitError:
-            tqdm.write("Rate limit 도달 → 5초 대기 후 재시도...")
+            tqdm.write("Rate limit → 5초 대기...")
             time.sleep(5)
         except openai.BadRequestError as e:
-            tqdm.write(f"BadRequest → 배치 내 텍스트 개별 처리로 전환: {e}")
-            # 배치 내 개별 처리
             for t in batch:
                 try:
                     r = openai.embeddings.create(input=[t[:10000]], model=EMBED_MODEL)
-                    all_embeddings.append(r.data[0].embedding)
-                except Exception as e2:
-                    tqdm.write(f"개별 처리 실패 → 빈 벡터 삽입: {e2}")
-                    all_embeddings.append([0.0] * 1536)
+                    chunk_embeddings.append(r.data[0].embedding)
+                except:
+                    chunk_embeddings.append([0.0] * 1536)
             break
 
-    # 100배치마다 체크포인트 저장
-    if (i + 1) % 100 == 0:
-        np.save(str(CKPT_PATH), np.array(all_embeddings, dtype="float32"))
-        tqdm.write(f"[체크포인트 저장] {len(all_embeddings):,}개")
+    # 1000개(=10배치)마다 청크 파일로 저장하고 메모리 비우기
+    if len(chunk_embeddings) >= 1000:
+        chunk_path = CKPT_DIR / f"chunk_{chunk_idx:04d}.npy"
+        np.save(str(chunk_path), np.array(chunk_embeddings[:1000], dtype="float32"))
+        tqdm.write(f"[청크 저장] {chunk_path.name} ({(chunk_idx+1)*1000:,}개 완료)")
+        chunk_embeddings = chunk_embeddings[1000:]  # 저장한 것 제거
+        chunk_idx += 1
 
-elapsed = time.time() - start
-print(f"[임베딩 소요시간] {elapsed:.1f}초 ({elapsed/60:.1f}분)")
 
-
-# ── 5. FAISS 인덱스 저장 ──────────────────────────────
-embeddings = np.array(all_embeddings, dtype="float32")
+# ── 5. 모든 청크 합쳐서 FAISS 저장 ──────────────────
+tqdm.write("청크 합치는 중...")
+all_chunks = sorted(CKPT_DIR.glob("chunk_*.npy"))
+embeddings = np.concatenate([np.load(str(c)) for c in all_chunks], axis=0)
 print(f"[임베딩 완료] shape: {embeddings.shape}")
 
 dimension = embeddings.shape[1]
 index = faiss.IndexFlatL2(dimension)
 index.add(embeddings)
-
 faiss.write_index(index, str(INDEX_PATH))
 print(f"[FAISS 저장] → {INDEX_PATH}")
 

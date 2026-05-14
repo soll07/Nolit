@@ -70,12 +70,13 @@ print(f'    production: 0~{PRODUCTION_MAX} → 0~5 (÷{PRODUCTION_MAX}×5)')
 
 # ── 8. 컬럼 순서 정리
 col_order = [
-    'ref_id', 'title', 'store_name', 'address', 'area', 'location',
+    'title', 'store_name', 'area', 'location',
     'description', 'playing_time', 'max_players', 'price',
     'difficulty', 'horror', 'activity',
     'satisfaction', 'puzzle', 'story', 'interior', 'production'
 ]
 df = df[col_order]
+df['source'] = 'bbabang'
 
 # ── 저장
 df.to_csv('bbabang_stats_final.csv', index=False, encoding='utf-8-sig')

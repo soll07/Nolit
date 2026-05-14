@@ -5,7 +5,7 @@ df = pd.read_csv('bbabang_all_reviews.csv', low_memory=False)
 
 # ── 1. 필요한 컬럼만 선택
 keep_cols = [
-    'title', 'store_name', 'review_text', 'review_headcount', 'is_escaped'
+    'title', 'store_name', 'review_text', 'review_headcount'
 ]
 df = df[keep_cols]
 print('[1] 필요 컬럼만 선택 완료')
@@ -40,6 +40,7 @@ print(f'[6] 한글 없는 리뷰 → NaN 교체: {korean_mask.sum()}행')
 before = len(df)
 df = df[df['review_text'].notna()].copy()
 print(f'[7] 텍스트 없는 행 제거: {before} → {len(df)}행')
+df['source'] = 'bbabang'
 
 # ── 저장
 df.to_csv('bbabang_reviews_final.csv', index=False, encoding='utf-8-sig')
