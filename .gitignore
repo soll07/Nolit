@@ -2,8 +2,10 @@
 .env
 
 # ── 데이터 파일 (용량 큼) ──────────────────────
-data/
-vectorstore/
+01_data/
+04_vectorstore/
+*.csv
+*.sqlite3
 
 # ── Python 캐시 ────────────────────────────────
 __pycache__/
