@@ -28,13 +28,15 @@ function escHtml(str) {
 
 function typeMessage(element, text, speed = 25) {
     return new Promise((resolve) => {
+        const formatted = text.replace(/\s*·/g, '\n·');
+        element.style.whiteSpace = 'pre-wrap';
         element.textContent = '';
         let i = 0;
         const timer = setInterval(() => {
-            element.textContent += text[i];
+            element.textContent += formatted[i];
             i++;
             scrollChat();
-            if (i >= text.length) {
+            if (i >= formatted.length) {
                 clearInterval(timer);
                 resolve();
             }
