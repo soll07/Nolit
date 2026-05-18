@@ -67,7 +67,7 @@ MODEL = "gpt-4o-mini"                                   # 비용 효율 + 속도
 # 시스템 프롬프트
 # ─────────────────────────────────────────────
 SYSTEM_PROMPT = """\
-당신은 오프라인 활동(보드게임, 머더미스터리) 추천 전문가입니다.
+당신은 오프라인 활동(보드게임, 방탈출, 머더미스터리) 추천 전문가입니다.
 
 역할:
 1. 검색 결과를 바탕으로 그룹에게 맞는 추천을 자연스러운 텍스트로 설명합니다.
@@ -83,11 +83,18 @@ weight 필드 설명 (보드게임):
 - 0~5 범위, 높을수록 복잡하고 어려운 게임
 - light: 2.5 미만, medium: 2.5~3.5, heavy: 3.5 초과
 
-horror 필드 설명 (방탈출):
+horror 필드 설명 (방탈출 / 머더미스터리):
 - 0~5 범위, 높을수록 공포 요소 강함. 0이면 공포 없음
 
-difficulty 필드 설명 (머더미스터리):
-- 머미나우: 1/2/3/4 이산형 (1=쉬움, 4=매우 어려움)
+difficulty 필드 설명:
+- 방탈출(빠방): 0~5 연속형, 높을수록 어려움
+- 머더미스터리: 1/2/3/4 이산형 (1=쉬움, 4=매우 어려움)
+
+satisfaction 필드 설명 (방탈출):
+- 0~5 범위, 높을수록 전체 만족도 높음
+
+puzzle / story / interior / production 필드 설명 (방탈출):
+- 0~5 범위(일부 6.0/6.5까지), 높을수록 해당 요소 품질 높음
 """
 # [필터 문서 §공통 주의사항 §3]
 # weight/horror/difficulty 설명을 프롬프트에 반드시 명시해야
@@ -190,6 +197,31 @@ def _build_context(
                 lines.append(f"  - 설명: {desc}")
             lines.append(f"  - 소스: {item.get('source', '?')}")
 
+        elif category == "escape":
+            lines.append(f"  - 매장: {item.get('store_name', '?')}")
+            lines.append(f"  - 지역: {item.get('location', '?')} ({item.get('area', '?')})")
+            lines.append(f"  - 최대 인원: {item.get('max_players', '?')}명")
+            lines.append(f"  - 플레이 시간: {item.get('playing_time', '?')}분")
+            if item.get("price") is not None:
+                lines.append(f"  - 가격: {item['price']:,}원")
+            if item.get("satisfaction") is not None:
+                lines.append(f"  - 만족도: {item['satisfaction']}/5")
+            if item.get("horror") is not None:
+                lines.append(f"  - 공포도: {item['horror']}/5 (0=공포없음)")
+            if item.get("difficulty") is not None:
+                lines.append(f"  - 난이도: {item['difficulty']}/5")
+            if item.get("puzzle") is not None:
+                lines.append(f"  - 퍼즐: {item['puzzle']}/5")
+            if item.get("story") is not None:
+                lines.append(f"  - 스토리: {item['story']}/5")
+            if item.get("interior") is not None:
+                lines.append(f"  - 인테리어: {item['interior']}")
+            if item.get("production") is not None:
+                lines.append(f"  - 연출: {item['production']}")
+            if item.get("description"):
+                desc = str(item["description"])[:200]
+                lines.append(f"  - 설명: {desc}")
+
         # 감정 태그 (tag_filter에서 부여된 태그)
         item_tags = item.get("emotion_tags", [])
         if item_tags:
@@ -235,7 +267,7 @@ def generate(
         return {
             "answer": "조건에 맞는 추천 결과를 찾지 못했습니다.",
             "games": [],
-            "next_question": "어떤 종류의 활동을 찾고 계신가요? 보드게임, 머더미스터리 중 선택해주세요.",
+            "next_question": "어떤 종류의 활동을 찾고 계신가요? 보드게임, 방탈출, 크라임씬(머더미스터리) 중 선택해주세요.",
         }
 
     # 컨텍스트 구성
@@ -391,9 +423,15 @@ def generate_without_api(
 
     # ── 요약 텍스트 생성 ──
     headcount = group.get("headcount", "?")
+    category_label = {
+        "boardgame": "보드게임",
+        "murdermystery": "머더미스터리",
+        "escape": "방탈출",
+    }.get(category, category)
+
     if games:
         top_title = games[0]["title"]
-        answer = f"{headcount}명 그룹에 맞는 추천 결과입니다. 1순위는 '{top_title}'입니다."
+        answer = f"{headcount}명 그룹에 맞는 {category_label} 추천 결과입니다. 1순위는 '{top_title}'입니다."
     else:
         answer = "조건에 맞는 추천 결과를 찾지 못했습니다."
 

@@ -107,17 +107,9 @@ def merge_slots(existing: dict, new: dict) -> dict:
 
 
 def missing_slots(slots: dict) -> list[str]:
-    """null인 슬롯 키 목록 반환 — activity_level은 방탈출 선택 시에만 필수"""
-    missing = []
-    for k in SLOT_KEYS:
-        if k == "activity_level":
-            # 방탈출 선택 시에만 activity_level 필수
-            if slots.get("domain") == "방탈출" and slots.get(k) is None:
-                missing.append(k)
-        else:
-            if slots.get(k) is None:
-                missing.append(k)
-    return missing
+    """null인 슬롯 키 목록 반환 — activity_level은 선택 항목(없으면 '보통' 기본값 사용)"""
+    OPTIONAL = {"activity_level"}
+    return [k for k in SLOT_KEYS if k not in OPTIONAL and slots.get(k) is None]
 
 
 def build_followup(missing: list[str]) -> str:
@@ -170,9 +162,9 @@ def slots_to_group(slots: dict) -> dict:
     relation_map = {"친한": "friend", "처음": "first_meeting"}
     horror_map   = {"모두": 2, "일부": 1, "없음": 0}
     return {
-        "headcount" : slots.get("person_count"),
-        "relation" : relation_map.get(slots.get("relationship")),
-        "horror_tolerance" : horror_map.get(slots.get("horror_tolerance")),
-        "budget" : slots.get("budget"),
-        "activity_level" : slots.get("activity_level"),
+        "headcount"       : slots.get("person_count"),
+        "relation"        : relation_map.get(slots.get("relationship")),
+        "horror_tolerance": horror_map.get(slots.get("horror_tolerance")),
+        "budget"          : slots.get("budget"),
+        "activity_level"  : slots.get("activity_level") or "보통",  # 미입력 시 기본값
     }

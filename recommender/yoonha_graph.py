@@ -70,7 +70,7 @@ if str(PROJECT_ROOT) not in sys.path:
 # Type 정의
 # =====================================================================
 
-Category = Literal["boardgame", "murdermystery"]
+Category = Literal["boardgame", "murdermystery", "escape"]
 
 
 class GraphInput(TypedDict, total=False):
@@ -157,7 +157,7 @@ class PipelineState(TypedDict, total=False):
 # =====================================================================
 
 # 지원하는 카테고리 집합 — check_sufficiency에서 유효성 검사에 사용
-SUPPORTED_CATEGORIES = {"boardgame", "murdermystery"}
+SUPPORTED_CATEGORIES = {"boardgame", "murdermystery", "escape"}
 
 # 카테고리 별칭 → 내부 표준값 매핑
 # 한국어/영어/약어/오타 등 다양한 입력을 허용하기 위해 alias를 폭넓게 정의
@@ -181,6 +181,16 @@ CATEGORY_ALIASES = {
     "머더": "murdermystery",
     "크라임씬": "murdermystery",
     "크라임": "murdermystery",
+    # 방탈출
+    "escape": "escape",
+    "escape_room": "escape",
+    "escape-room": "escape",
+    "escaproom": "escape",
+    "방탈출": "escape",
+    "탈출": "escape",
+    "방탈": "escape",
+    "bbabang": "escape",
+    "빠방": "escape",
 }
 
 # 한국어 수사 → 숫자 변환 테이블
@@ -254,8 +264,11 @@ def _normalize_category(raw_category: str | None, query: str) -> str:
     if value in CATEGORY_ALIASES:
         return CATEGORY_ALIASES[value]
 
-    # 2~3) query에서 카테고리 키워드 추론
+    # 2~4) query에서 카테고리 키워드 추론
     query_lower = query.lower()
+
+    if any(keyword in query_lower for keyword in ["방탈출", "탈출", "이스케이프", "escape room"]):
+        return "escape"
 
     if any(keyword in query_lower for keyword in ["머더", "크라임", "murder", "crime"]):
         return "murdermystery"
@@ -495,6 +508,93 @@ def _extract_relation(query: str) -> str | None:
     return None
 
 
+# 빠방 데이터에 실제 존재하는 area/location 값 기준 매핑
+_ESCAPE_AREA_KEYWORDS: dict[str, str] = {
+    "강원": "강원",
+    "경기": "경기",
+    "인천": "인천",
+}
+
+_ESCAPE_LOCATION_KEYWORDS: dict[str, str] = {
+    # 강원
+    "강릉": "강릉시", "원주": "원주시", "춘천": "춘천시", "정선": "정선군",
+    # 경기
+    "수원": "수원시", "성남": "성남시", "부천": "부천시", "안양": "안양시",
+    "의정부": "의정부시", "용인": "용인시", "안산": "안산시", "구리": "구리시",
+    "시흥": "시흥시", "광명": "광명시", "남양주": "남양주시", "김포": "김포시",
+    "화성": "화성시", "이천": "이천시", "군포": "군포시", "동두천": "동두천시",
+    # 인천
+    "부평": "부평구", "남동": "남동구", "미추홀": "미추홀구", "연수": "연수구",
+}
+
+
+def _extract_escape_location(query: str) -> tuple[str | None, str | None]:
+    """
+    방탈출 쿼리에서 area(시/도)와 location(시/군/구)을 추출한다.
+
+    [빠방 데이터 기준 실제 값]
+        area    : 강원, 경기, 인천
+        location: 강릉시, 원주시, 수원시, 부천시 등 26개
+
+    Returns:
+        (area, location) — 찾지 못한 경우 None
+    """
+    if not query:
+        return None, None
+
+    location = None
+    for keyword, loc_value in _ESCAPE_LOCATION_KEYWORDS.items():
+        if keyword in query:
+            location = loc_value
+            break
+
+    area = None
+    for keyword, area_value in _ESCAPE_AREA_KEYWORDS.items():
+        if keyword in query:
+            area = area_value
+            break
+
+    return area, location
+
+
+def _extract_price(query: str) -> int | None:
+    """
+    방탈출 쿼리에서 예산(원 단위)을 추출한다.
+
+    [지원 패턴]
+        "2만원 이하" → 20000
+        "15000원 이하" → 15000
+    """
+    if not query:
+        return None
+
+    m = re.search(r"(\d+)\s*만\s*원\s*이하", query)
+    if m:
+        return int(m.group(1)) * 10000
+
+    m = re.search(r"(\d+)\s*원\s*이하", query)
+    if m:
+        return int(m.group(1))
+
+    return None
+
+
+def _extract_escape_prefs(query: str) -> dict[str, bool]:
+    """
+    방탈출 선호 요소(퍼즐/스토리/인테리어/연출)를 query에서 추출한다.
+    """
+    prefs: dict[str, bool] = {}
+    if any(kw in query for kw in ["퍼즐", "문제", "힌트 없이"]):
+        prefs["prefer_puzzle"] = True
+    if any(kw in query for kw in ["스토리", "서사", "몰입", "이야기"]):
+        prefs["prefer_story"] = True
+    if any(kw in query for kw in ["인테리어", "예쁜", "꾸민", "분위기"]):
+        prefs["prefer_interior"] = True
+    if any(kw in query for kw in ["연출", "장치", "퀄리티", "특수효과"]):
+        prefs["prefer_production"] = True
+    return prefs
+
+
 def _extract_boardgame_category(query: str) -> str | None:
     """
     query에서 보드게임 BGG 카테고리를 추출한다.
@@ -590,6 +690,26 @@ def _merge_group_from_query(
             if mechanism is not None:
                 merged["mechanism"] = mechanism
 
+    # ── escape(방탈출) 전용 조건 추출 ──
+    if category == "escape":
+        if "area" not in merged or "location" not in merged:
+            area, location = _extract_escape_location(query)
+            if area and "area" not in merged:
+                merged["area"] = area
+            if location and "location" not in merged:
+                merged["location"] = location
+
+        if "price" not in merged:
+            price = _extract_price(query)
+            if price is not None:
+                merged["price"] = price
+
+        # 선호 요소 (퍼즐/스토리/인테리어/연출)
+        escape_prefs = _extract_escape_prefs(query)
+        for k, v in escape_prefs.items():
+            if k not in merged:
+                merged[k] = v
+
     return merged
 
 
@@ -621,7 +741,7 @@ def _build_next_question(
         return "어떤 활동을 찾고 계신지 알려주세요. 예: 4명이서 할 보드게임"
 
     if "category" in missing_fields:
-        return "보드게임과 머더미스터리 중 어떤 활동을 추천받고 싶으신가요?"
+        return "보드게임, 방탈출, 크라임씬(머더미스터리) 중 어떤 활동을 추천받고 싶으신가요?"
 
     if "headcount" in missing_fields or not group.get("headcount"):
         return "몇 명이서 함께할 예정인가요?"
@@ -647,6 +767,20 @@ def _build_next_question(
 
         if not group.get("relation"):
             return "함께하는 분들과의 관계가 어떻게 되나요? 친구, 연인, 직장동료, 첫 만남 중에 알려주세요."
+
+    # ── escape(방탈출) 선택 조건 보완 ──
+    if category == "escape":
+        if group.get("horror_tolerance") is None:
+            return "공포도는 어느 정도 괜찮으신가요? 무서운 거 싫음, 약간 가능, 무서워도 괜찮음 중에 알려주세요."
+
+        if not group.get("location") and not group.get("area"):
+            return "방탈출 지역은 어디를 원하시나요? (강원/경기/인천 권역, 예: 원주, 수원, 부천)"
+
+        if not group.get("play_time"):
+            return "플레이 시간은 어느 정도가 적당한가요? 예: 60분, 75분"
+
+        if not group.get("relation"):
+            return "함께하는 분들과의 관계가 어떻게 되나요? 친구, 연인, 직장동료 중에 알려주세요."
 
     # ── 모든 핵심 조건 충족 시 추가 선호 질문 ──
     return "추가로 피하고 싶은 요소나 선호하는 분위기가 있나요?"
@@ -774,12 +908,26 @@ def _generate_without_api_local(
                 "min_players": item.get("min_players"),
                 "max_players": item.get("max_players"),
                 "image": item.get("image"),
+                # escape room 전용 필드
+                "store_name": item.get("store_name"),
+                "area": item.get("area"),
+                "location": item.get("location"),
+                "address": item.get("address"),
+                "price": item.get("price"),
+                "playing_time": item.get("playing_time"),
+                "satisfaction": item.get("satisfaction"),
+                "horror": item.get("horror"),
+                "difficulty": item.get("difficulty"),
             }
         )
 
     # ── 요약 answer 조립 ──
     headcount_text = f"{group.get('headcount')}명" if group.get("headcount") else "요청하신 조건"
-    category_label = "보드게임" if category == "boardgame" else "머더미스터리"
+    category_label = (
+        "보드게임" if category == "boardgame"
+        else "방탈출" if category == "escape"
+        else "머더미스터리"
+    )
     top_title = games[0]["title"] if games else ""
 
     answer = (
@@ -1091,7 +1239,7 @@ def node_generate(state: PipelineState) -> dict[str, Any]:
             )
 
         except Exception as exc:
-            # API 실패 → 로컬 fallback으로 대체하고 generate_error에 원인 기록
+            # API 실패 시 로컬 fallback
             result = _generate_without_api_local(
                 items=items,
                 group=group,
@@ -1099,15 +1247,7 @@ def node_generate(state: PipelineState) -> dict[str, Any]:
                 emotion_tags=emotion_tags,
                 retrieve_error=retrieve_error,
             )
-            result["answer"] = result["answer"] + f" API 생성은 실패하여 룰 기반 결과로 대체했습니다."
-
-            return {
-                "result": _normalize_result(result),
-                "answer": result.get("answer", ""),
-                "games": result.get("games", []),
-                "next_question": result.get("next_question", ""),
-                "generate_error": str(exc),
-            }
+            return {**_normalize_result(result), "generate_error": str(exc)}
 
     else:
         result = _generate_without_api_local(
@@ -1118,131 +1258,61 @@ def node_generate(state: PipelineState) -> dict[str, Any]:
             retrieve_error=retrieve_error,
         )
 
-    formatted = _normalize_result(result)
-
-    return {
-        "result": formatted,
-        "answer": formatted["answer"],
-        "games": formatted["games"],
-        "next_question": formatted["next_question"],
-        "generate_error": "",
-    }
+    return _normalize_result(result)
 
 
 # =====================================================================
-# Graph build
+# Graph assembly
 # =====================================================================
 
 def build_graph():
-    """
-    LangGraph 노드·엣지를 구성하고 컴파일된 graph를 반환한다.
+    workflow = StateGraph(PipelineState)
 
-    [노드 등록 순서]
-        normalize_input → check_sufficiency
-            ├─ clarify → END
-            └─ query_transform → retrieve → tag_filter → generate → END
-
-    [input_schema / output_schema]
-        LangGraph에 GraphInput / GraphOutput을 명시하여
-        graph.invoke() 입출력 타입을 강제한다.
-    """
-
-    workflow = StateGraph(
-        PipelineState,
-        input_schema=GraphInput,
-        output_schema=GraphOutput,
-    )
-
-    # ── 노드 등록 ──
-    workflow.add_node("normalize_input", node_normalize_input)
+    workflow.add_node("normalize_input",   node_normalize_input)
     workflow.add_node("check_sufficiency", node_check_sufficiency)
-    workflow.add_node("clarify", node_clarify)
-    workflow.add_node("query_transform", node_query_transform)
-    workflow.add_node("retrieve", node_retrieve)
-    workflow.add_node("tag_filter", node_tag_filter)
-    workflow.add_node("generate", node_generate)
+    workflow.add_node("clarify",           node_clarify)
+    workflow.add_node("query_transform",   node_query_transform)
+    workflow.add_node("retrieve",          node_retrieve)
+    workflow.add_node("tag_filter",        node_tag_filter)
+    workflow.add_node("generate",          node_generate)
 
-    # ── 엔트리 포인트 ──
     workflow.set_entry_point("normalize_input")
-
-    # ── 고정 엣지 ──
     workflow.add_edge("normalize_input", "check_sufficiency")
-
-    # ── 조건부 엣지: 조건 충분 여부에 따라 분기 ──
     workflow.add_conditional_edges(
         "check_sufficiency",
         route_after_sufficiency,
         {
-            "clarify": "clarify",
+            "clarify":         "clarify",
             "query_transform": "query_transform",
         },
     )
-
-    # ── clarify 경로: 역질문 반환 후 바로 종료 ──
-    workflow.add_edge("clarify", END)
-
-    # ── RAG 경로: 검색 → 필터 → 생성 → 종료 ──
+    workflow.add_edge("clarify",         END)
     workflow.add_edge("query_transform", "retrieve")
-    workflow.add_edge("retrieve", "tag_filter")
-    workflow.add_edge("tag_filter", "generate")
-    workflow.add_edge("generate", END)
+    workflow.add_edge("retrieve",        "tag_filter")
+    workflow.add_edge("tag_filter",      "generate")
+    workflow.add_edge("generate",        END)
 
     return workflow.compile()
 
 
-# =====================================================================
-# 공개 인터페이스
-# =====================================================================
-
-# 모듈 임포트 시 1회 컴파일 — 이후 graph.invoke()로 재사용
+# 모듈 임포트 시 즉시 컴파일 (from recommender.yoonha_graph import graph)
 graph = build_graph()
 
 
+
 def run_pipeline(
-    user_text: str,
-    group: dict[str, Any] | None = None,
-    category: str = "boardgame",
-    use_api: bool = True,
-) -> dict[str, Any]:
+    user_text="",
+    group=None,
+    category="boardgame",
+    use_api=True,
+):
     """
-    기존 yoonha_graph.py 호출 방식과의 하위 호환을 위한 래퍼 함수.
-
-    [기존 호출 방식]
-        run_pipeline(
-            user_text="4명이서 할 전략 보드게임 추천해줘",
-            group={"headcount": 4},
-            category="boardgame",
-            use_api=False,
-        )
-
-    [신규 권장 방식]
-        graph.invoke({
-            "query": "4명이서 할 보드게임",
-            "category": "boardgame"
-        })
-
-    내부적으로 graph.invoke()를 호출하므로 동작은 동일하다.
+    views.py wrapper around graph.invoke().
     """
-
-    return graph.invoke(
-        {
-            "query": user_text,
-            "category": category,
-            "group": group or {},
-            "use_api": use_api,
-        }
-    )
-
-
-# =====================================================================
-# 로컬 테스트
-# =====================================================================
-if __name__ == "__main__":
-    result = graph.invoke(
-        {
-            "query": "4명이서 할 보드게임",
-            "category": "boardgame",
-        }
-    )
-
-    print(result)
+    return graph.invoke({
+        "query":     user_text,
+        "user_text": user_text,
+        "category":  category,
+        "group":     group or {},
+        "use_api":   use_api,
+    })

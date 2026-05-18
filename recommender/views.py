@@ -6,6 +6,7 @@ from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_POST, require_GET
 import traceback
 
+
 AI_FLOW = [
     "안녕하세요! 그룹에 맞는 여가 활동을 추천해드리겠습니다.\n먼저, 어떤 활동을 원하시나요?· 보드게임 · 방탈출 · 머더미스터리",
     "몇 명이서 활동하실건가요?"
@@ -44,43 +45,31 @@ DEFAULT_PERSONA = {
 SOURCE_TO_CATEGORY = {
     "bgg": "보드게임",
     "boardlife": "보드게임",
-    "bbabang": "보드게임",
+    "bbabang": "방탈출",
     "murmynow": "머더미스터리",
     "murdermysterylog": "머더미스터리",
 }
 
 
-def _rag_to_recommendations(games):
+PIPELINE_CATEGORY_MAP = {
+    "boardgame": "보드게임",
+    "escape": "방탈출",
+    "murdermystery": "머더미스터리",
+}
+
+
+def _rag_to_recommendations(games, pipeline_category=None):
     """RAG 파이프라인 games 리스트를 프론트엔드 recommendations 포맷으로 변환"""
-    print(f">>> _rag_to_recommendations 호출됨, games: {len(games)}개")
+    default_category = PIPELINE_CATEGORY_MAP.get(pipeline_category, "보드게임")
     result = []
     for i, game in enumerate(games[:3], 1):
-        print(f"source 값: {game.get('source')}, title: {game.get('title')}")
         rating = game.get("avg_rating") or game.get("rating") or 0
         matched = game.get("matched_tags") or game.get("emotion_tags") or []
         score = game.get("final_score")
         source = game.get("source", "")
-        category = SOURCE_TO_CATEGORY.get(source, "보드게임")
+        category = SOURCE_TO_CATEGORY.get(source, default_category)
 
-        if matched:
-            evidence = "감정 태그 매칭: " + ", ".join(matched)
-        elif score:
-            evidence = "최종 점수: " + str(round(float(score), 3))
-        else:
-            evidence = "RAG 검색 결과 기반 추천"
-
-    #     result.append({
-    #         "rank": i,
-    #         "title": display_title, # DB에 있는 정확한 이름
-    #         "category": category,
-    #         "rating": round(float(db_rating or rating), 1),
-    #         "reason": game.get("reason", ""),
-    #         "evidence": evidence,
-    #         "risk": None,
-    #         "image_url": db_image_url, # 프론트로 보낼 이미지 URL
-    #         "db_id": db_id,            # 나중에 상세 페이지 링크용
-    #     })
-    # return result
+        raw_title = game.get("title", "?")
 
         if matched:
             evidence = "감정 태그 매칭: " + ", ".join(matched)
@@ -91,12 +80,14 @@ def _rag_to_recommendations(games):
 
         result.append({
             "rank": i,
-            "title": game.get("title", "?"),
+            "title": raw_title,
             "category": category,
             "rating": round(float(rating), 1) if rating else 0,
             "reason": game.get("reason", ""),
             "evidence": evidence,
             "risk": None,
+            "image_url": game.get("image") or "",
+            "db_id": None,
         })
     return result
 
@@ -320,7 +311,7 @@ def smart_chat_api(request):
         print(f">>> rag_result 키: {list(rag_result.keys())}")
 
         reply = (answer + "\n\n" + next_q) if next_q else answer
-        recommendations = _rag_to_recommendations(games) if games else RECOMMENDATIONS
+        recommendations = _rag_to_recommendations(games, pipeline_category=category) if games else RECOMMENDATIONS
 
     except Exception as e:
         print("=" * 50)
