@@ -13,6 +13,7 @@ from langchain_core.prompts import ChatPromptTemplate
 
 # ── 슬롯 스키마 ───────────────────────────────────────────────
 SLOT_KEYS = [
+    "domain",
     "person_count",
     "relationship",
     "horror_tolerance",
@@ -22,6 +23,7 @@ SLOT_KEYS = [
 
 # 빠진 슬롯 → 역질문 매핑
 FOLLOWUP_QUESTIONS = {
+    "domain" : "어떤 활동을 원하시나요?\n· 보드게임 · 방탈출 · 머더미스터리",
     "person_count" : "몇 명이서 활동하실 예정인가요?",
     "relationship" : "처음 만나는 사이인가요, 아니면 이미 친한 사이인가요?",
     "horror_tolerance" : "공포 요소에 대해 어떻게 생각하시나요?\n· 모두 괜찮음\n· 일부 민감함\n· 전체적으로 피하고 싶음",
@@ -33,7 +35,7 @@ FOLLOWUP_QUESTIONS = {
 _llm = ChatOpenAI(model="gpt-4o-mini", temperature=0)
 
 _prompt = ChatPromptTemplate.from_messages([
-    ("system", """사용자 메시지에서 아래 5가지 슬롯을 추출해 JSON으로만 반환하세요.
+    ("system", """사용자 메시지에서 아래 6가지 슬롯을 추출해 JSON으로만 반환하세요.
 값이 언급되지 않으면 null로 표시하세요. 설명은 생략하세요.
 
 [상황 힌트]
@@ -42,6 +44,7 @@ _prompt = ChatPromptTemplate.from_messages([
 (예: 현재 힌트에 'horror_tolerance'가 있고 사용자가 "피하고 싶어"라고 했다면, 공포를 피하고 싶다는 뜻이므로 "없음"으로 처리하세요.)
 
 슬롯 정의:
+- domain : "보드게임" | "방탈출" | "머더미스터리"
 - person_count : 정수 (예: 4)
 - relationship : "친한" 또는 "처음"
 - horror_tolerance : "모두" | "일부" | "없음" (공포를 피하고 싶다는 표현은 "없음"으로 매핑)
@@ -50,6 +53,7 @@ _prompt = ChatPromptTemplate.from_messages([
 
 출력 형식 (이것만 반환):
 {{
+    "domain": null,
     "person_count" : null,
     "relationship" : null,
     "horror_tolerance" : null,
@@ -103,8 +107,9 @@ def merge_slots(existing: dict, new: dict) -> dict:
 
 
 def missing_slots(slots: dict) -> list[str]:
-    """null인 슬롯 키 목록 반환"""
-    return [k for k in SLOT_KEYS if slots.get(k) is None]
+    """null인 슬롯 키 목록 반환 — activity_level은 선택 항목(없으면 '보통' 기본값 사용)"""
+    OPTIONAL = {"activity_level"}
+    return [k for k in SLOT_KEYS if k not in OPTIONAL and slots.get(k) is None]
 
 
 def build_followup(missing: list[str]) -> str:
@@ -157,9 +162,9 @@ def slots_to_group(slots: dict) -> dict:
     relation_map = {"친한": "friend", "처음": "first_meeting"}
     horror_map   = {"모두": 2, "일부": 1, "없음": 0}
     return {
-        "headcount" : slots.get("person_count"),
-        "relation" : relation_map.get(slots.get("relationship")),
-        "horror_tolerance" : horror_map.get(slots.get("horror_tolerance")),
-        "budget" : slots.get("budget"),
-        "activity_level" : slots.get("activity_level"),
+        "headcount"       : slots.get("person_count"),
+        "relation"        : relation_map.get(slots.get("relationship")),
+        "horror_tolerance": horror_map.get(slots.get("horror_tolerance")),
+        "budget"          : slots.get("budget"),
+        "activity_level"  : slots.get("activity_level") or "보통",  # 미입력 시 기본값
     }
