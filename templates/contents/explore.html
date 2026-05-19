@@ -5,61 +5,142 @@
 <style>
     /* ── 카테고리 버튼 탭 ──────────────────────────── */
     .cat-tab-row {
-        display: flex; gap: 8px; flex-wrap: wrap;
+        display: flex;
+        gap: 8px;
+        flex-wrap: wrap;
         margin-bottom: 20px;
     }
     .cat-tab-btn {
-        display: flex; align-items: center; gap: 6px;
-        padding: 8px 16px; border-radius: 999px;
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        padding: 8px 16px;
+        border-radius: 999px;
         border: 1.5px solid var(--border);
-        background: #fff; cursor: pointer;
-        font-size: 13px; font-weight: 600;
-        color: #4A4A4A; transition: all 0.15s;
+        background: #fff;
+        cursor: pointer;
+        font-size: 13px;
+        font-weight: 600;
+        color: #4A4A4A;
+        transition: all 0.15s;
         font-family: 'Nunito', sans-serif;
         text-decoration: none;
     }
-    .cat-tab-btn:hover { border-color: #2A2A2A; color: #2A2A2A; }
+    .cat-tab-btn:hover {
+        border-color: #2A2A2A;
+        color: #2A2A2A;
+    }
     .cat-tab-btn.active {
-        background: #2A2A2A; color: #fff;
+        background: #2A2A2A;
+        color: #fff;
         border-color: #2A2A2A;
     }
-    .cat-tab-btn .tab-count { font-size: 11px; opacity: 0.7; }
+    .cat-tab-btn .tab-count {
+        font-size: 11px;
+        opacity: 0.7;
+    }
 
-    /* ── 검색 + 난이도 필터 ────────────────────────── */
+    /* ── 검색 + 난이도 필터 (완전 수정) ───────────────── */
     .search-filter-row {
-        display: flex; gap: 10px; align-items: center;
-        margin-bottom: 20px; flex-wrap: wrap;
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        margin-bottom: 20px;
+        flex-wrap: nowrap; /* 무조건 한 줄 */
     }
-    .search-wrap { position: relative; flex: 1; min-width: 200px; }
-    .search-wrap input {
-        width: 100%; padding: 10px 16px 10px 38px;
-        border: 1.5px solid var(--border); border-radius: var(--radius);
-        font-size: 13.5px; font-family: 'Nunito', sans-serif;
-        outline: none; transition: border-color 0.15s;
-    }
-    .search-wrap input:focus { border-color: var(--orange); }
-    .search-icon {
-        position: absolute; left: 12px; top: 50%;
-        transform: translateY(-50%); font-size: 14px; pointer-events: none;
-    }
+
     .filter-select {
-        padding: 10px 14px; border: 1.5px solid var(--border);
-        border-radius: var(--radius); font-size: 13px;
+        width: 160px;
+        height: 46px;
+        padding: 0 14px;
+        border: 1.5px solid var(--border);
+        border-radius: var(--radius);
+        font-size: 13px;
         font-family: 'Nunito', sans-serif;
-        background: #fff; cursor: pointer; outline: none;
+        background: #fff;
+        cursor: pointer;
+        outline: none;
+        flex-shrink: 0;
     }
+
+    .search-wrap {
+        flex: 1;
+        min-width: 240px;
+        height: 46px;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        border: 1.5px solid var(--border);
+        border-radius: var(--radius);
+        padding: 0 14px;
+        background: #fff;
+        transition: border-color 0.15s;
+    }
+
+    .search-wrap:focus-within {
+        border-color: var(--orange);
+    }
+
+    .search-icon {
+        font-size: 14px;
+        pointer-events: none;
+    }
+
+    .search-wrap input {
+        width: 100%;
+        border: none;
+        outline: none;
+        font-size: 13.5px;
+        font-family: 'Nunito', sans-serif;
+        background: transparent;
+    }
+
     .filter-btn {
-        background: var(--orange); color: #fff;
-        border: none; border-radius: var(--radius);
-        padding: 10px 20px; font-family: 'Nunito', sans-serif;
-        font-weight: 700; font-size: 14px; cursor: pointer;
+        height: 46px;
+        padding: 0 22px;
+        background: var(--orange);
+        color: #fff;
+        border: none;
+        border-radius: var(--radius);
+        font-family: 'Nunito', sans-serif;
+        font-weight: 700;
+        font-size: 14px;
+        cursor: pointer;
         transition: background 0.15s;
+        flex-shrink: 0;
+        white-space: nowrap;
     }
-    .filter-btn:hover { background: var(--orange-dim); }
+    .filter-btn:hover {
+        background: var(--orange-dim);
+    }
+
+    /* 모바일 대응 (화면 좁으면 자동으로 2줄로 떨어지게) */
+    @media (max-width: 768px) {
+        .search-filter-row {
+            flex-wrap: wrap;
+        }
+
+        .filter-select {
+            width: 100%;
+        }
+
+        .search-wrap {
+            width: 100%;
+            min-width: 100%;
+        }
+
+        .filter-btn {
+            width: 100%;
+        }
+    }
 
     .result-count {
-        color: #7A7469; font-size: 12px; margin-bottom: 20px;
-        font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase;
+        color: #7A7469;
+        font-size: 12px;
+        margin-bottom: 20px;
+        font-weight: 600;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
     }
 
     /* ── 카드 그리드 ────────────────────────────────── */
@@ -69,9 +150,12 @@
         gap: 16px;
     }
     .activity-card {
-        background: #FFFFFF; border: 1px solid var(--border);
-        border-radius: var(--radius-lg); padding: 22px;
-        box-shadow: var(--shadow-sm); transition: all 0.2s ease;
+        background: #FFFFFF;
+        border: 1px solid var(--border);
+        border-radius: var(--radius-lg);
+        padding: 22px;
+        box-shadow: var(--shadow-sm);
+        transition: all 0.2s ease;
         cursor: pointer;
     }
     .activity-card:hover {
@@ -79,85 +163,217 @@
         transform: translateY(-2px);
     }
     .cat-icon {
-        width: 40px; height: 40px; background: #E6FAF8;
-        border-radius: 10px; display: flex; align-items: center;
-        justify-content: center; font-size: 1.3rem; flex-shrink: 0;
+        width: 40px;
+        height: 40px;
+        background: #E6FAF8;
+        border-radius: 10px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 1.3rem;
+        flex-shrink: 0;
     }
     .card-meta {
-        display: flex; flex-wrap: wrap; gap: 4px 16px;
-        font-size: 12px; color: #4A4A4A; margin-bottom: 12px;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 4px 16px;
+        font-size: 12px;
+        color: #4A4A4A;
+        margin-bottom: 12px;
     }
-    .card-meta span { display: flex; align-items: center; gap: 4px; }
+    .card-meta span {
+        display: flex;
+        align-items: center;
+        gap: 4px;
+    }
 
     /* ── 모달 ───────────────────────────────────────── */
     .modal-overlay {
-        position: fixed; inset: 0; z-index: 999;
+        position: fixed;
+        inset: 0;
+        z-index: 999;
         background: rgba(0,0,0,0.5);
-        display: flex; align-items: center; justify-content: center; padding: 16px;
-        opacity: 0; pointer-events: none; transition: opacity 0.2s;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 16px;
+        opacity: 0;
+        pointer-events: none;
+        transition: opacity 0.2s;
     }
-    .modal-overlay.open { opacity: 1; pointer-events: auto; }
+    .modal-overlay.open {
+        opacity: 1;
+        pointer-events: auto;
+    }
     .modal-box {
-        background: #fff; border-radius: var(--radius-lg);
-        max-width: 680px; width: 100%; max-height: 90vh; overflow-y: auto;
+        background: #fff;
+        border-radius: var(--radius-lg);
+        max-width: 680px;
+        width: 100%;
+        max-height: 90vh;
+        overflow-y: auto;
         box-shadow: 0 20px 60px rgba(0,0,0,0.18);
-        transform: scale(0.95); transition: transform 0.2s;
+        transform: scale(0.95);
+        transition: transform 0.2s;
     }
-    .modal-overlay.open .modal-box { transform: scale(1); }
+    .modal-overlay.open .modal-box {
+        transform: scale(1);
+    }
     .modal-header {
-        position: sticky; top: 0; background: #fff;
+        position: sticky;
+        top: 0;
+        background: #fff;
         border-bottom: 1px solid var(--border);
         padding: 18px 22px;
-        display: flex; align-items: flex-start; justify-content: space-between;
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
         z-index: 1;
     }
-    .modal-title { font-size: 1.2rem; font-weight: 700; color: #2A2A2A; }
+    .modal-title {
+        font-size: 1.2rem;
+        font-weight: 700;
+        color: #2A2A2A;
+    }
     .modal-cat-label {
-        font-size: 11px; color: #7A7469; font-weight: 600;
-        letter-spacing: 0.06em; text-transform: uppercase; margin-top: 3px;
+        font-size: 11px;
+        color: #7A7469;
+        font-weight: 600;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        margin-top: 3px;
     }
     .modal-close-btn {
-        background: none; border: none; font-size: 1.1rem;
-        color: #7A7469; cursor: pointer; padding: 4px 8px;
-        border-radius: var(--radius); transition: background 0.15s;
+        background: none;
+        border: none;
+        font-size: 1.1rem;
+        color: #7A7469;
+        cursor: pointer;
+        padding: 4px 8px;
+        border-radius: var(--radius);
+        transition: background 0.15s;
     }
-    .modal-close-btn:hover { background: #f3f4f6; color: #2A2A2A; }
-    .modal-body { padding: 22px; display: flex; flex-direction: column; gap: 20px; }
-    .modal-rating { display: flex; align-items: center; gap: 14px; }
+    .modal-close-btn:hover {
+        background: #f3f4f6;
+        color: #2A2A2A;
+    }
+    .modal-body {
+        padding: 22px;
+        display: flex;
+        flex-direction: column;
+        gap: 20px;
+    }
+    .modal-rating {
+        display: flex;
+        align-items: center;
+        gap: 14px;
+    }
     .modal-rating-num {
-        font-size: 2.2rem; font-weight: 800; color: #FF5200;
-        display: flex; align-items: baseline; gap: 4px;
+        font-size: 2.2rem;
+        font-weight: 800;
+        color: #FF5200;
+        display: flex;
+        align-items: baseline;
+        gap: 4px;
     }
-    .modal-rating-denom { font-size: 1rem; color: #7A7469; font-weight: 400; }
-    .modal-divider { width: 1px; height: 28px; background: var(--border); }
-    .modal-rating-note { font-size: 12.5px; color: #7A7469; }
-    .modal-section-title { font-size: 0.9rem; font-weight: 700; color: #2A2A2A; margin-bottom: 8px; }
-    .modal-desc { font-size: 12.5px; color: #7A7469; line-height: 1.7; }
-    .modal-detail-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+    .modal-rating-denom {
+        font-size: 1rem;
+        color: #7A7469;
+        font-weight: 400;
+    }
+    .modal-divider {
+        width: 1px;
+        height: 28px;
+        background: var(--border);
+    }
+    .modal-rating-note {
+        font-size: 12.5px;
+        color: #7A7469;
+    }
+    .modal-section-title {
+        font-size: 0.9rem;
+        font-weight: 700;
+        color: #2A2A2A;
+        margin-bottom: 8px;
+    }
+    .modal-desc {
+        font-size: 12.5px;
+        color: #7A7469;
+        line-height: 1.7;
+    }
+    .modal-detail-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 10px;
+    }
     .modal-detail-item {
-        display: flex; align-items: center; gap: 10px;
-        padding: 10px 12px; background: #F9F9F9;
-        border-radius: var(--radius); border: 1px solid var(--border);
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 10px 12px;
+        background: #F9F9F9;
+        border-radius: var(--radius);
+        border: 1px solid var(--border);
     }
-    .modal-detail-label { font-size: 11px; color: #7A7469; margin-bottom: 2px; }
-    .modal-detail-value { font-size: 13px; font-weight: 700; color: #2A2A2A; }
-    .modal-detail-value.horror-none { color: #16a34a; }
-    .modal-detail-value.horror-high { color: #dc2626; }
+    .modal-detail-label {
+        font-size: 11px;
+        color: #7A7469;
+        margin-bottom: 2px;
+    }
+    .modal-detail-value {
+        font-size: 13px;
+        font-weight: 700;
+        color: #2A2A2A;
+    }
+    .modal-detail-value.horror-none {
+        color: #16a34a;
+    }
+    .modal-detail-value.horror-high {
+        color: #dc2626;
+    }
     .modal-cta {
-        background: #FFF5F0; border: 1px solid #FFD8C0;
-        border-radius: var(--radius-lg); padding: 18px;
+        background: #FFF5F0;
+        border: 1px solid #FFD8C0;
+        border-radius: var(--radius-lg);
+        padding: 18px;
     }
-    .modal-cta h4 { font-size: 14px; font-weight: 700; margin-bottom: 6px; color: #2A2A2A; }
-    .modal-cta p  { font-size: 12px; color: #7A7469; margin-bottom: 12px; }
+    .modal-cta h4 {
+        font-size: 14px;
+        font-weight: 700;
+        margin-bottom: 6px;
+        color: #2A2A2A;
+    }
+    .modal-cta p  {
+        font-size: 12px;
+        color: #7A7469;
+        margin-bottom: 12px;
+    }
     .modal-cta-btn {
-        display: block; width: 100%; padding: 11px;
-        background: var(--orange); color: #fff; border: none;
-        border-radius: var(--radius); font-family: 'Nunito', sans-serif;
-        font-weight: 700; font-size: 14px; cursor: pointer;
-        text-align: center; text-decoration: none; transition: background 0.15s;
+        display: block;
+        width: 100%;
+        padding: 11px;
+        background: var(--orange);
+        color: #fff;
+        border: none;
+        border-radius: var(--radius);
+        font-family: 'Nunito', sans-serif;
+        font-weight: 700;
+        font-size: 14px;
+        cursor: pointer;
+        text-align: center;
+        text-decoration: none;
+        transition: background 0.15s;
     }
-    .modal-cta-btn:hover { background: var(--orange-dim); color: #fff; }
-    .modal-loading { text-align: center; padding: 40px; color: #7A7469; font-size: 13px; }
+    .modal-cta-btn:hover {
+        background: var(--orange-dim);
+        color: #fff;
+    }
+    .modal-loading {
+        text-align: center;
+        padding: 40px;
+        color: #7A7469;
+        font-size: 13px;
+    }
 </style>
 {% endblock style %}
 
@@ -193,19 +409,26 @@
     <!-- 검색바 + 난이도 필터 -->
     <form method="get" action="{% url 'contents:explore' %}">
         <input type="hidden" name="category" value="{{ sel_category }}">
+
         <div class="search-filter-row">
-            <div class="search-wrap">
-                <span class="search-icon">🔍</span>
-                <input type="text" name="search"
-                       placeholder="제목이나 태그로 검색..."
-                       value="{{ sel_search }}">
-            </div>
+
+            <!-- 난이도 드롭다운 -->
             <select name="difficulty" class="filter-select">
                 <option value=""    {% if sel_difficulty == ''    %}selected{% endif %}>모든 난이도</option>
                 <option value="초급" {% if sel_difficulty == '초급' %}selected{% endif %}>초급</option>
                 <option value="중급" {% if sel_difficulty == '중급' %}selected{% endif %}>중급</option>
                 <option value="고급" {% if sel_difficulty == '고급' %}selected{% endif %}>고급</option>
             </select>
+
+            <!-- 검색창 -->
+            <div class="search-wrap">
+                <span class="search-icon">🔍</span>
+                <input type="text" name="search"
+                       placeholder="제목으로 검색..."
+                       value="{{ sel_search }}">
+            </div>
+
+            <!-- 검색 버튼 -->
             <button type="submit" class="filter-btn">검색</button>
         </div>
     </form>
@@ -248,22 +471,22 @@
                 {% if act.players %}<span>👥 {{ act.players }}</span>{% endif %}
                 {% if act.time %}  <span>⏱ {{ act.time }}</span>{% endif %}
                 {% if act.difficulty %}<span>⚡ {{ act.difficulty }}</span>{% endif %}
-                {% if act.horror %}
-                    {% if act.horror == '공포 있음' or act.horror == '공포 강함' %}
-                        <span class="badge badge-red">{{ act.horror }}</span>
-                    {% else %}
-                        <span class="badge badge-green">{{ act.horror }}</span>
-                    {% endif %}
-                {% endif %}
                 {% if act.region %}<span>📍 {{ act.region }}</span>{% endif %}
             </div>
 
-            <!-- 태그 -->
-            {% if act.tags %}
+            <!-- 태그 + 공포도 한 줄 -->
+            {% if act.tags or act.horror %}
             <div>
                 {% for tag in act.tags %}
                 <span class="badge badge-teal">{{ tag }}</span>
                 {% endfor %}
+                <!-- {% if act.horror %} -->
+                    {% if act.horror == '공포 강함' or act.horror == '공포 있음' %}
+                        <span class="badge badge-red">👻 {{ act.horror }}</span>
+                    {% else %}
+                        <span class="badge badge-green">👻 {{ act.horror }}</span>
+                    {% endif %}
+                {% endif %}
             </div>
             {% endif %}
 
@@ -366,7 +589,6 @@ function renderModal(game) {
     const desc       = game.description ? game.description.replace(/\r?\n/g, "<br>") : "";
 
     document.getElementById("modal-body").innerHTML = `
-        <!-- 별점 -->
         <div class="modal-rating">
             <div class="modal-rating-num">
                 <span style="color:#fbbf24">★</span>
@@ -377,32 +599,22 @@ function renderModal(game) {
             <div class="modal-rating-note">${ratingNote}</div>
         </div>
 
-        <!-- 게임 소개 (항상 표시) -->
         ${desc ? `
         <div>
             <div class="modal-section-title">게임 소개</div>
             <p class="modal-desc">${desc}</p>
         </div>` : ""}
 
-        <!-- 상세 정보 -->
         <div>
             <div class="modal-section-title">상세 정보</div>
             <div class="modal-detail-grid">${detailHTML}</div>
         </div>
 
-        <!-- 태그 -->
         ${tagsHTML ? `
         <div>
             <div class="modal-section-title">태그</div>
             <div>${tagsHTML}</div>
         </div>` : ""}
-
-        <!-- CTA -->
-        <div class="modal-cta">
-            <h4>이 활동이 마음에 드시나요?</h4>
-            <p>AI 추천에서 그룹 조건을 입력하면 더 정확한 추천을 받을 수 있습니다.</p>
-            <a href="/recommender/chat/" class="modal-cta-btn">AI 추천 받기</a>
-        </div>
     `;
 }
 
@@ -421,45 +633,48 @@ function detailItem(icon, label, value, cls = "") {
 function buildDetailGrid(game) {
     if (game.category === "boardgame") {
         return [
-            detailItem("👥", "인원",      game.players),
+            detailItem("👥", "인원",       game.players),
             detailItem("⏱", "플레이 시간", game.play_time),
-            detailItem("⚡", "복잡도",    game.difficulty),
-            // detailItem("⭐", "BGG 별점",  game.bgg_rating ? `${game.bgg_rating}/10` : ""),
-            detailItem("✏️", "디자이너",  game.designer),
+            detailItem("⚡", "복잡도",     game.difficulty),
+            detailItem("✏️", "디자이너",   game.designer),
         ].join("");
     }
-    }
+
     if (game.category === "escape") {
         const cls = game.horror_level === "공포 없음" ? "horror-none"
                   : game.horror_level === "강함"     ? "horror-high" : "";
         return [
-            detailItem("👥", "인원",      game.players),
+            detailItem("👥", "인원",       game.players),
             detailItem("⏱", "플레이 시간", game.play_time),
-            detailItem("⚡", "난이도",    game.difficulty),
-            detailItem("👻", "공포도",    game.horror_level, cls),
-            detailItem("📍", "지역",      game.region),
-            detailItem("🏢", "브랜드",    game.brand),
+            detailItem("⚡", "난이도",     game.difficulty),
+            detailItem("👻", "공포도",     game.horror_level, cls),
+            detailItem("📍", "지역",       game.region),
+            detailItem("🏢", "브랜드",     game.brand),
         ].join("");
     }
+
     return [
-        detailItem("👥", "인원",      game.players),
-        detailItem("⏱",  "플레이 시간", game.play_time),
+        detailItem("👥", "인원",       game.players),
+        detailItem("⏱", "플레이 시간", game.play_time),
         detailItem("🔍", "추리 난이도", game.difficulty),
-        detailItem("🎭", "시리즈",    game.series),
-        detailItem("✏️", "제작",      game.maker),
-        detailItem("📦", "출판사",    game.publisher_kr || game.publisher),
+        detailItem("🎭", "시리즈",     game.series),
+        detailItem("✏️", "제작",       game.maker),
+        detailItem("📦", "출판사",     game.publisher_kr || game.publisher),
     ].join("");
 }
 
-// 카드 클릭
 document.querySelectorAll(".activity-card").forEach(card => {
     card.addEventListener("click", () => openModal(card.dataset.id, card.dataset.cat));
 });
 
 document.getElementById("modal-close").addEventListener("click", closeModal);
+
 document.getElementById("modal-overlay").addEventListener("click", e => {
     if (e.target === document.getElementById("modal-overlay")) closeModal();
 });
-document.addEventListener("keydown", e => { if (e.key === "Escape") closeModal(); });
+
+document.addEventListener("keydown", e => {
+    if (e.key === "Escape") closeModal();
+});
 </script>
 {% endblock script %}
