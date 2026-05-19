@@ -105,6 +105,10 @@ class GraphOutput(TypedDict):
     answer: str
     games: list[dict[str, Any]]
     next_question: str
+    conflict_warnings: list[str]    # 충돌 경고 메시지 목록
+    has_conflict: bool              # 충돌 여부 플래그
+    experience_type: str            # icebreaker | romantic | fun | teambuilding | general
+    planner_info: dict[str, Any]    # 예상 플레이 시간 범위 (play_time_range, time_summary)
 
 
 class PipelineState(TypedDict, total=False):
@@ -150,6 +154,10 @@ class PipelineState(TypedDict, total=False):
     answer: str
     games: list[dict[str, Any]]
     next_question: str
+    conflict_warnings: list[str]    # 충돌 경고 메시지 목록
+    has_conflict: bool              # 충돌 여부 플래그
+    experience_type: str            # icebreaker | romantic | fun | teambuilding | general
+    planner_info: dict[str, Any]    # 예상 플레이 시간 범위 (play_time_range, time_summary)
 
 
 # =====================================================================
@@ -908,6 +916,10 @@ def _generate_without_api_local(
                 "min_players": item.get("min_players"),
                 "max_players": item.get("max_players"),
                 "image": item.get("image"),
+                "playing_time": item.get("playing_time"),
+                "min_time": item.get("min_time"),
+                "max_time": item.get("max_time"),
+                "play_time": item.get("play_time"),
                 # escape room 전용 필드
                 "store_name": item.get("store_name"),
                 "area": item.get("area"),
@@ -944,12 +956,12 @@ def _generate_without_api_local(
 
 
 # =====================================================================
-# LangGraph Node 함수
+# 1번 그룹 조건 수집 노드
 # =====================================================================
 
 def node_normalize_input(state: PipelineState) -> dict[str, Any]:
     """
-    [노드: normalize_input]
+    [노드: normalize_input] -- 1번 그룹 조건 수집 (입력 정규화)
     외부 입력 query/category를 내부 파이프라인 state로 변환한다.
 
     [수행 작업]
@@ -994,17 +1006,21 @@ def node_normalize_input(state: PipelineState) -> dict[str, Any]:
         "answer": "",
         "games": [],
         "next_question": "",
+        "conflict_warnings": [],
+        "has_conflict": False,
+        "experience_type": "general",
+        "planner_info": {},
     }
 
 
 def node_check_sufficiency(state: PipelineState) -> dict[str, Any]:
     """
-    [노드: check_sufficiency]
+    [노드: check_sufficiency] -- 1번 그룹 조건 수집 (충분성 판단)
     RAG 검색을 실행하기 위한 최소 조건이 충족되었는지 판단한다.
 
     [최소 필수 조건]
         - query:    자연어 요청 존재
-        - category: boardgame 또는 murdermystery
+        - category: boardgame / escape / murdermystery 중 하나
         - headcount: 인원 수 존재
 
     [설계 의도]
@@ -1049,15 +1065,15 @@ def route_after_sufficiency(state: PipelineState) -> str:
     """
 
     if state.get("is_sufficient"):
-        return "query_transform"
+        return "conflict_detect"
 
     return "clarify"
 
 
 def node_clarify(state: PipelineState) -> dict[str, Any]:
     """
-    [노드: clarify]
-    최소 조건이 부족한 경우 RAG 검색 없이 역질문만 반환한다.
+    [노드: clarify] -- 1번 그룹 조건 수집 (역질문 생성)
+    최소 조건이 부족한 경우 RAG 검색 없이 안내 메시지(answer)와 역질문(next_question)을 반환한다.
 
     [흐름]
         check_sufficiency에서 missing_fields가 1개 이상인 경우 이 노드로 분기 →
@@ -1089,9 +1105,104 @@ def node_clarify(state: PipelineState) -> dict[str, Any]:
     }
 
 
+
+# =====================================================================
+# 2번 충돌 감지 노드
+# =====================================================================
+
+def node_conflict_detect(state):
+    """
+    [노드: conflict_detect] -- 2번 충돌 감지 노드
+    그룹 조건 사이의 논리적 충돌을 탐지하고 경고 메시지를 생성한다.
+    소프트 경고 정책: 파이프라인 중단 없이 경고만 누적.
+
+    탐지 규칙:
+        - 머더미스터리 + horror_tolerance=0 : 공포 불가인데 머더미스터리 선택
+        - 방탈출 + horror_tolerance=0       : 비공포 방탈출 우선 추천 안내
+        - 보드게임/머더미스터리 + 9명 이상   : 권장 인원 초과 안내
+    """
+    warnings = list(state.get("conflict_warnings") or [])
+    group    = state.get("group") or {}
+    category = state.get("category", "")
+    horror   = group.get("horror_tolerance", 1)
+    headcount = group.get("headcount") or 0
+    try:
+        headcount = int(headcount)
+    except (TypeError, ValueError):
+        headcount = 0
+
+    if category == "murdermystery" and horror == 0:
+        warnings.append(
+            "머더미스터리를 선택하셨지만 공포 요소를 피하고 싶어하시는 분이 계신 것 같습니다. "
+            "가벼운 추리 테마 보드게임도 대안이 될 수 있습니다."
+        )
+    elif category == "escape" and horror == 0:
+        warnings.append(
+            "방탈출 중 공포 테마가 없는 방을 우선 추천해 드리겠습니다."
+        )
+
+    if category in ("boardgame", "murdermystery") and headcount >= 9:
+        warnings.append(
+            f"{headcount}명은 권장 인원(최대 8명)을 초과합니다. "
+            "인원을 나눠서 진행하거나, 대인원 전용 게임을 선택하는 것을 권장합니다."
+        )
+
+    return {
+        "conflict_warnings": warnings,
+        "has_conflict": len(warnings) > 0,
+    }
+
+
+# =====================================================================
+# 3번 경험 타입 분류 노드
+# =====================================================================
+
+_EXPERIENCE_TYPE_MAP = {
+    ("first_meeting", "boardgame"):     "icebreaker",
+    ("first_meeting", "murdermystery"): "icebreaker",
+    ("first_meeting", "escape"):        "icebreaker",
+    ("couple",        "boardgame"):     "romantic",
+    ("couple",        "murdermystery"): "romantic",
+    ("couple",        "escape"):        "romantic",
+    ("friend",        "boardgame"):     "fun",
+    ("friend",        "murdermystery"): "fun",
+    ("friend",        "escape"):        "fun",
+    ("coworker",      "boardgame"):     "teambuilding",
+    ("coworker",      "murdermystery"): "teambuilding",
+    ("coworker",      "escape"):        "teambuilding",
+}
+
+
+def node_classify_experience(state):
+    """
+    [노드: classify_experience] -- 3번 경험 타입 분류 노드
+    그룹 관계(relation)와 카테고리를 조합해 경험 유형(experience_type)을 분류한다.
+
+    분류 기준:
+        first_meeting -> icebreaker  : 어색함 해소, 대화 유도형 추천
+        couple        -> romantic    : 친밀감 강화형 추천 (현재 슬롯 미지원)
+        friend        -> fun         : 재미 극대화형 추천
+        coworker      -> teambuilding: 협력/소통 강화형 추천 (현재 슬롯 미지원)
+        기타/null     -> general     : 범용 추천
+
+    주의: jinseo_slot_extractor는 현재 "친한"(friend) / "처음"(first_meeting)만 추출.
+          couple, coworker는 슬롯 확장 시 활성화 가능.
+    """
+    group    = state.get("group") or {}
+    category = state.get("category", "boardgame")
+    relation = group.get("relation") or ""
+
+    exp_type = _EXPERIENCE_TYPE_MAP.get((relation, category), "general")
+    return {"experience_type": exp_type}
+
+
+# =====================================================================
+# 4번 검색+추천 생성 노드
+# =====================================================================
+
 def node_query_transform(state: PipelineState) -> dict[str, Any]:
     """
-    [노드: query_transform]
+    [노드: query_transform] -- 4번 검색+추천 생성 (쿼리 변환)
     그룹 조건 + 자연어 요청을 BM25/FAISS 검색용 구조화 쿼리로 변환한다.
 
     [위임]
@@ -1122,7 +1233,7 @@ def node_query_transform(state: PipelineState) -> dict[str, Any]:
 
 def node_retrieve(state: PipelineState) -> dict[str, Any]:
     """
-    [노드: retrieve]
+    [노드: retrieve] -- 4번 검색+추천 생성 (FAISS/BM25 검색)
     BM25 + FAISS 하이브리드 검색을 실행하여 후보 아이템을 수집한다.
 
     [흐름]
@@ -1168,7 +1279,7 @@ def node_retrieve(state: PipelineState) -> dict[str, Any]:
 
 def node_tag_filter(state: PipelineState) -> dict[str, Any]:
     """
-    [노드: tag_filter]
+    [노드: tag_filter] -- 4번 검색+추천 생성 (감정 태그 필터)
     감정 태그 기반 필터링 및 점수 조정을 수행한다.
 
     [위임]
@@ -1176,7 +1287,7 @@ def node_tag_filter(state: PipelineState) -> dict[str, Any]:
 
     [horror_tolerance]
         group에서 horror_tolerance를 읽어 필터에 전달한다.
-        값이 없으면 기본값 2(공포 가능)로 처리한다.
+        값이 없으면 기본값 1(일부 공포 허용)로 처리한다.
 
     [결과]
         filtered_items: 점수 조정 및 필터링이 완료된 최종 후보 리스트
@@ -1189,7 +1300,7 @@ def node_tag_filter(state: PipelineState) -> dict[str, Any]:
     from recommender.rag.yoonha_tag_filter import filter_and_score
 
     group = state.get("group", {})
-    horror_tolerance = group.get("horror_tolerance", 2)   # None이면 공포 가능(2)으로 처리
+    horror_tolerance = group.get("horror_tolerance", 1)   # None이면 공포 가능(2)으로 처리
 
     filtered = filter_and_score(
         items=items,
@@ -1202,7 +1313,7 @@ def node_tag_filter(state: PipelineState) -> dict[str, Any]:
 
 def node_generate(state: PipelineState) -> dict[str, Any]:
     """
-    [노드: generate]
+    [노드: generate] -- 4번 검색+추천 생성 (추천 문장 생성)
     추천 텍스트, 추천 게임 리스트, 역질문을 생성한다.
 
     [use_api 분기]
@@ -1262,19 +1373,130 @@ def node_generate(state: PipelineState) -> dict[str, Any]:
 
 
 # =====================================================================
-# Graph assembly
+# 5번 플래너 계산 노드
 # =====================================================================
+
+def _to_play_time_int(v):
+    """플레이 시간 값을 int로 변환. None이거나 0 이하이면 None 반환."""
+    try:
+        n = int(v)
+        return n if n > 0 else None
+    except (TypeError, ValueError):
+        return None
+
+
+def _extract_play_time_from_game(game):
+    """
+    게임 dict에서 플레이 시간을 (min_time, max_time) 튜플로 추출한다.
+
+    소스별 필드 구조 (기획서 6번 플래너 시간 계산 주의):
+        BGG, 빠방          : playing_time 단일값  -> (t, t)
+        보드라이프, 머미나우 : min_time/max_time 범위형 -> (min, max)
+        머더로그            : play_time 단일값    -> (t, t)
+        값 없음/0 이하      : (None, None) -> 계산에서 제외
+
+    Returns:
+        (min_time, max_time) 둘 다 None이면 시간 정보 없음
+    """
+    min_t = _to_play_time_int(game.get("min_time"))
+    max_t = _to_play_time_int(game.get("max_time"))
+
+    if min_t is not None or max_t is not None:
+        return min_t, max_t
+
+    single = (
+        _to_play_time_int(game.get("playing_time")) or
+        _to_play_time_int(game.get("play_time"))
+    )
+    if single is not None:
+        return single, single
+
+    return None, None
+
+
+def _minutes_to_hhmm(minutes: int) -> str:
+    """분(int)을 'X시간 Y분' 형태 문자열로 변환. 60분 미만이면 'Y분'만 반환."""
+    h, m = divmod(minutes, 60)
+    if h > 0 and m > 0:
+        return f"{h}시간 {m}분"
+    if h > 0:
+        return f"{h}시간"
+    return f"{m}분"
+
+
+def node_planner(state):
+    """
+    [노드: planner] -- 5번 플래너 계산 노드
+    기획 의도: 플레이 타임 기반으로 불확실성을 제거하는 한 줄 요약을 만든다.
+
+    소스별 시간 필드 처리 (기획서 6번 반영):
+        - playing_time이 None이면 해당 게임은 시간 계산에서 제외
+        - 머미나우/보드라이프: min_time/max_time 범위형 -> 범위로 통합
+        - BGG/빠방/머더로그: playing_time/play_time 단일값 -> 단일값으로 취급
+
+    계산 항목:
+        play_time_range : 상위 3개 게임 기준 (min, max) 분 단위 범위
+        time_summary    : "총 X시간 소요 예상" 형식 한 줄 요약
+        play_time_note  : 시간 정보 없는 게임 수 (프론트 안내용)
+        experience_type : classify_experience에서 분류된 경험 타입
+        conflict_warnings: 충돌 경고 목록
+    """
+    games = state.get("games", []) or []
+    planner_info = {}
+
+    if games:
+        all_min = []
+        all_max = []
+        missing_time_count = 0
+
+        for g in games[:3]:
+            min_t, max_t = _extract_play_time_from_game(g)
+            if min_t is None and max_t is None:
+                missing_time_count += 1
+            else:
+                if min_t is not None:
+                    all_min.append(min_t)
+                if max_t is not None:
+                    all_max.append(max_t)
+
+        if all_min or all_max:
+            range_min = min(all_min) if all_min else None
+            range_max = max(all_max) if all_max else None
+            planner_info["play_time_range"] = {"min": range_min, "max": range_max}
+
+            if range_min is not None and range_max is not None and range_min == range_max:
+                planner_info["time_summary"] = f"총 {_minutes_to_hhmm(range_max)} 소요 예상"
+            elif range_min is not None and range_max is not None:
+                planner_info["time_summary"] = (
+                    f"총 {_minutes_to_hhmm(range_min)}~{_minutes_to_hhmm(range_max)} 소요 예상"
+                )
+            elif range_max is not None:
+                planner_info["time_summary"] = f"총 약 {_minutes_to_hhmm(range_max)} 소요 예상"
+
+        if missing_time_count > 0:
+            planner_info["play_time_note"] = (
+                f"상위 {missing_time_count}개 게임은 플레이 시간 정보가 없어 계산에서 제외됐습니다."
+            )
+
+    planner_info["experience_type"]   = state.get("experience_type", "general")
+    planner_info["conflict_warnings"] = state.get("conflict_warnings", [])
+
+    return {"planner_info": planner_info}
+
 
 def build_graph():
     workflow = StateGraph(PipelineState)
 
-    workflow.add_node("normalize_input",   node_normalize_input)
-    workflow.add_node("check_sufficiency", node_check_sufficiency)
-    workflow.add_node("clarify",           node_clarify)
-    workflow.add_node("query_transform",   node_query_transform)
-    workflow.add_node("retrieve",          node_retrieve)
-    workflow.add_node("tag_filter",        node_tag_filter)
-    workflow.add_node("generate",          node_generate)
+    workflow.add_node("normalize_input",     node_normalize_input)
+    workflow.add_node("check_sufficiency",   node_check_sufficiency)
+    workflow.add_node("clarify",             node_clarify)
+    workflow.add_node("conflict_detect",     node_conflict_detect)
+    workflow.add_node("classify_experience", node_classify_experience)
+    workflow.add_node("query_transform",     node_query_transform)
+    workflow.add_node("retrieve",            node_retrieve)
+    workflow.add_node("tag_filter",          node_tag_filter)
+    workflow.add_node("generate",            node_generate)
+    workflow.add_node("planner",             node_planner)
 
     workflow.set_entry_point("normalize_input")
     workflow.add_edge("normalize_input", "check_sufficiency")
@@ -1282,20 +1504,24 @@ def build_graph():
         "check_sufficiency",
         route_after_sufficiency,
         {
-            "clarify":         "clarify",
-            "query_transform": "query_transform",
+            "clarify":          "clarify",
+            "conflict_detect":  "conflict_detect",
         },
     )
-    workflow.add_edge("clarify",         END)
-    workflow.add_edge("query_transform", "retrieve")
-    workflow.add_edge("retrieve",        "tag_filter")
-    workflow.add_edge("tag_filter",      "generate")
-    workflow.add_edge("generate",        END)
+    workflow.add_edge("clarify",             END)
+    workflow.add_edge("conflict_detect",     "classify_experience")
+    workflow.add_edge("classify_experience", "query_transform")
+    workflow.add_edge("query_transform",     "retrieve")
+    workflow.add_edge("retrieve",            "tag_filter")
+    workflow.add_edge("tag_filter",          "generate")
+    workflow.add_edge("generate",            "planner")
+    workflow.add_edge("planner",             END)
 
     return workflow.compile()
 
 
-# 모듈 임포트 시 즉시 컴파일 (from recommender.yoonha_graph import graph)
+# 모듈 임포트 시 그래프를 즉시 컴파일해 캐싱 -- 매 요청마다 재생성 방지
+# 외부에서는 graph 직접 사용보다 run_pipeline() 함수를 통해 호출
 graph = build_graph()
 
 

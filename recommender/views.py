@@ -67,8 +67,6 @@ def _rag_to_recommendations(games, pipeline_category=None):
         # final_score 제외하고 실제 평점만 사용
         avg_rating = game.get("avg_rating")
         rating_val = game.get("rating") or game.get("satisfaction")
-        print(f">>> avg_rating={avg_rating}, rating_val={rating_val}, type={type(avg_rating)}")
-        print(f">>> game keys: {list(game.keys())}")
 
         # 5점 이하인 값만 사용 (final_score 같은 내부 점수 제외)
         rating = 0
@@ -117,6 +115,9 @@ def home(request):
 
 
 def ai(request):
+    # 페이지 로드(새로고침) 시 슬롯 초기화 → 같은 대화창에서만 기억
+    request.session[_SLOT_SESSION_KEY] = {}
+    request.session.modified = True
     return render(request, "recommender/ai.html", {
         "current_page": "ai",
         "ai_flow_json": json.dumps(AI_FLOW, ensure_ascii=False),
@@ -169,7 +170,7 @@ def chat_api(request):
 
         rag_result = run_pipeline(user_text=query, category=category, use_api=True)
 
-        # 세션 초기화 (다음 대화를 위해)
+        # 세션 유지 (추천 후 조건 추가/변경으로 재추천 가능)
         request.session["chat_messages"] = []
         request.session.modified = True
 
@@ -291,11 +292,9 @@ def smart_chat_api(request):
         category = domain_map.get(merged.get("domain"), "boardgame")
 
         group = slots_to_group(merged)
-        query = slots_to_query(merged)   # user_text 맥락용
-
-        print(f">>> merged 슬롯: {merged}")    # ← 추가
-        print(f">>> group: {group}")          # ← 추가
-        print(f">>> category: {category}")    # ← 추가
+        base_query = slots_to_query(merged)
+        # 추천 후 추가 요청(조건 변경·추가)이 있으면 query에 그대로 반영
+        query = f"{base_query} {message}".strip() if message else base_query
 
         rag_result = run_pipeline(
             user_text=query,   # 자연어 맥락
@@ -304,37 +303,21 @@ def smart_chat_api(request):
             use_api=True,
         )
 
-        print(f">>> retrieve_error: {rag_result.get('retrieve_error')}")
-        print(f">>> generate_error: {rag_result.get('generate_error')}")
-
         games = rag_result.get("games", [])
-
-        # ← 여기에 추가
-        for i, g in enumerate(games):
-            print(f">>> game {i}: title={g.get('title')}, source={g.get('source')}")
-
         answer = rag_result.get("answer", "그룹 조건을 분석했습니다.")
         next_q = rag_result.get("next_question", "")
-
-        print(f">>> games 수: {len(games)}")
-        print(f">>> games[0]: {games[0] if games else 'empty'}") 
-        print(f">>> answer: {answer[:50]}")         
-        print(f">>> rag_result 키: {list(rag_result.keys())}")
 
         # reply = (answer + "\n\n" + next_q) if next_q else answer
         reply = answer
         recommendations = _rag_to_recommendations(games, pipeline_category=category) if games else RECOMMENDATIONS
 
     except Exception as e:
-        print("=" * 50)
-        print("RAG 오류:", e)
-        traceback.print_exc()   # ← 전체 스택 출력
-        print("=" * 50)
+        traceback.print_exc()
         reply = RAG_FALLBACK_MESSAGE
         recommendations = RECOMMENDATIONS
 
     # 세션 초기화 (다음 대화를 위해)
-    request.session[_SLOT_SESSION_KEY] = {}
+    # request.session[_SLOT_SESSION_KEY] = {}
     request.session.modified = True
 
     return JsonResponse({

@@ -44,7 +44,10 @@ _prompt = ChatPromptTemplate.from_messages([
 - domain : "보드게임" | "방탈출" | "머더미스터리"
 - person_count : 정수 (예: 4)
 - relationship : "친한" 또는 "처음"
-- horror_tolerance : "모두" | "일부" | "없음" (공포를 피하고 싶다는 표현은 "없음"으로 매핑)
+- horror_tolerance : "모두" | "일부" | "없음"
+  · "모두"  : 괜찮아, 다 괜찮아, 상관없어, 무서운 거 좋아, OK, 괜찮음
+  · "일부"  : 좀 무서운 건 괜찮아, 조금은 괜찮아, 약간은 가능
+  · "없음"  : 무서운 거 싫어, 피하고 싶어, 못해, 공포 없이, 무섭지 않은 걸로
 - activity_level : "조용" | "보통" | "활발"
 
 출력 형식 (이것만 반환):
