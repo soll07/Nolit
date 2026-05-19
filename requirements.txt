@@ -1,15 +1,37 @@
-django
-openai
-faiss-cpu
-numpy
-pandas
-python-dotenv
-tqdm
-pyyaml
-sentence-transformers
-rapidfuzz
-rank-bm25
-langgraph
+# Web Framework
+Django
+asgiref
+sqlparse
+
+# Database
 psycopg2-binary
 supabase
+
+# AI / LLM
+openai
 langchain-openai
+langchain-core
+langchain
+langgraph
+langgraph-checkpoint
+langgraph-prebuilt
+tiktoken
+
+# Vector Search
+faiss-cpu
+sentence-transformers
+
+# Search
+rapidfuzz
+rank-bm25
+
+# Data
+numpy
+pandas
+python-dateutil
+
+# Utils
+python-dotenv
+pyyaml
+tqdm
+requests
