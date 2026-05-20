@@ -6,8 +6,8 @@
 
 # ── 기본 경로 ──────────────────────────────────
 paths:
-  data_dir   : "data"
-  vector_dir : "data"
+  data_dir   : "01_data"
+  vector_dir : "04_vectorstore"
   env_file   : ".env"
 
 # ── 임베딩 모델 설정 ───────────────────────────
@@ -22,42 +22,59 @@ embedding:
   max_chars     : 30000
   sleep_sec     : 0.5
 
+# ── 벡터 DB 설정 ───────────────────────────────
+pinecone:
+  api_key: ""          # .env에서 읽을 것이므로 비워도 됨
+  index_names:
+    boardgame      : "nolit-boardgame"
+    escape_stats   : "nolit-escape-stats"
+    escape_reviews : "nolit-escape-reviews"
+    crimescene     : "nolit-crimescene"
+
 # ── 검색 설정 ──────────────────────────────────
 retrieval:
   top_k  : 5
   rrf_k  : 60
 
 # ── 데이터소스별 설정 ──────────────────────────
-# engine    : openai | hf  (임베딩 엔진 선택)
-# use_ckpt  : 체크포인트 여부 (대용량 데이터)
-# fuzzy     : fuzzy matching 사용 여부 (bbabang 전용)
+# engine         : openai | hf          (임베딩 엔진 선택)
+# use_ckpt       : 체크포인트 여부       (대용량 데이터)
+# fuzzy          : fuzzy matching 여부   (bbabang 전용)
+# pinecone_index : Pinecone 인덱스명
+# namespace      : Pinecone 네임스페이스
 
 sources:
 
   # ── OpenAI 계열 ──────────────────────────────
 
   bgg_stats:
-    engine   : openai
-    csv      : "bgg_stats_final.csv"
-    index    : "faiss_bgg_stats.index"
-    meta     : "faiss_bgg_stats_meta.json"
-    text_col : "text"
-    use_ckpt : false
+    engine         : openai
+    csv            : "boardgame/bgg_stats_final.csv"
+    index          : "faiss_bgg_stats.index"
+    meta           : "faiss_bgg_stats_meta.json"
+    pinecone_index : "nolit-boardgame"
+    namespace      : "bgg_stats"
+    text_col       : "text"
+    use_ckpt       : false
 
   bgg_reviews:
-    engine   : openai
-    csv      : "bgg_reviews_final.csv"
-    index    : "faiss_bgg_reviews.index"
-    meta     : "faiss_bgg_reviews_meta.json"
-    text_col : "text"
-    use_ckpt : true
+    engine         : openai
+    csv            : "boardgame/bgg_reviews_final.csv"
+    index          : "faiss_bgg_reviews.index"
+    meta           : "faiss_bgg_reviews_meta.json"
+    pinecone_index : "nolit-boardgame"
+    namespace      : "bgg_reviews"
+    text_col       : "text"
+    use_ckpt       : true
 
   boardlife_stats:
-    engine   : openai
-    csv      : "boardlife_games_stats_final.csv"
-    index    : "faiss_boardlife_stats.index"
-    meta     : "faiss_boardlife_stats_meta.json"
-    text_col : "description"
+    engine         : openai
+    csv            : "boardgame/boardlife_games_stats_final.csv"
+    index          : "faiss_boardlife_stats.index"
+    meta           : "faiss_boardlife_stats_meta.json"
+    pinecone_index : "nolit-boardgame"
+    namespace      : "boardlife_stats"
+    text_col       : "description"
     meta_cols:
       - rank
       - title
@@ -79,35 +96,41 @@ sources:
       - min_time
       - max_time
       - source
-    use_ckpt : false
+    use_ckpt       : false
 
   boardlife_reviews:
-    engine   : openai
-    csv      : "boardlife_reviews_final.csv"
-    index    : "faiss_boardlife_reviews.index"
-    meta     : "faiss_boardlife_reviews_meta.json"
-    text_col : "review_text"
+    engine         : openai
+    csv            : "boardgame/boardlife_reviews_final.csv"
+    index          : "faiss_boardlife_reviews.index"
+    meta           : "faiss_boardlife_reviews_meta.json"
+    pinecone_index : "nolit-boardgame"
+    namespace      : "boardlife_reviews"
+    text_col       : "review_text"
     meta_cols:
       - rank
       - title
       - rating
       - source
-    use_ckpt : false
+    use_ckpt       : false
 
   murmynow:
-    engine   : openai
-    csv      : "murmynow_final.csv"
-    index    : "faiss_murmynow.index"
-    meta     : "faiss_murmynow_meta.json"
-    text_col : "text"
-    use_ckpt : true
+    engine         : openai
+    csv            : "crimescene/murmynow_final.csv"
+    index          : "faiss_murmynow.index"
+    meta           : "faiss_murmynow_meta.json"
+    pinecone_index : "nolit-crimescene"
+    namespace      : "murmynow"
+    text_col       : "text"
+    use_ckpt       : true
 
   murdermysterylog:
-    engine   : openai
-    csv      : "murdermysterylog_final.csv"
-    index    : "faiss_murdermysterylog.index"
-    meta     : "faiss_murdermysterylog_meta.json"
-    text_col : "reviews"
+    engine         : openai
+    csv            : "crimescene/murdermysterylog_final.csv"
+    index          : "faiss_murdermysterylog.index"
+    meta           : "faiss_murdermysterylog_meta.json"
+    pinecone_index : "nolit-crimescene"
+    namespace      : "murdermysterylog"
+    text_col       : "reviews"
     meta_cols:
       - url
       - name
@@ -120,24 +143,28 @@ sources:
       - min_players
       - max_players
       - source
-    use_ckpt : false
+    use_ckpt       : false
 
   # ── HuggingFace 계열 (bbabang 전용) ──────────
 
   bbabang_stats:
-    engine   : hf
-    csv_stats   : "bbabang_stats_final.csv"
-    csv_reviews : "bbabang_reviews_final.csv"
-    index    : "faiss_bbabang_stats.index"
-    meta     : "faiss_bbabang_stats_metadata.json"
-    use_ckpt : false
-    fuzzy    : true
+    engine         : hf
+    csv_stats      : "escape/bbabang_stats_final.csv"
+    csv_reviews    : "escape/bbabang_reviews_final.csv"
+    index          : "faiss_bbabang_stats.index"
+    meta           : "faiss_bbabang_stats_metadata.json"
+    pinecone_index : "nolit-escape-stats"
+    namespace      : "bbabang_stats"
+    use_ckpt       : false
+    fuzzy          : true
 
   bbabang_reviews:
-    engine   : hf
-    csv_stats   : "bbabang_stats_final.csv"
-    csv_reviews : "bbabang_reviews_final.csv"
-    index    : "faiss_bbabang_reviews.index"
-    meta     : "faiss_bbabang_reviews_metadata.json"
-    use_ckpt : false
-    fuzzy    : true
+    engine         : hf
+    csv_stats      : "escape/bbabang_stats_final.csv"
+    csv_reviews    : "escape/bbabang_reviews_final.csv"
+    index          : "faiss_bbabang_reviews.index"
+    meta           : "faiss_bbabang_reviews_metadata.json"
+    pinecone_index : "nolit-escape-reviews"
+    namespace      : "bbabang_reviews"
+    use_ckpt       : false
+    fuzzy          : true

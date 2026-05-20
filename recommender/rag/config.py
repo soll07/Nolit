@@ -45,3 +45,28 @@ def get_retrieval_cfg() -> dict:
 
 def list_sources() -> list[str]:
     return list(get_config()["sources"].keys())
+
+def get_pinecone_cfg() -> dict:
+    """Pinecone 전체 설정 반환"""
+    return get_config()["pinecone"]
+
+def get_source_pinecone(source_name: str) -> tuple[str, str]:
+    """
+    소스별 Pinecone 인덱스명 + 네임스페이스 반환
+    
+    Returns:
+        (index_name, namespace)
+        예: ("nolit-boardgame", "bgg_stats")
+    """
+    src_cfg = get_config()["sources"][source_name]
+    
+    index_name = src_cfg.get("pinecone_index")
+    namespace  = src_cfg.get("namespace")
+    
+    if not index_name or not namespace:
+        raise ValueError(
+            f"[{source_name}] config.yaml에 pinecone_index 또는 namespace 없음\n"
+            f"sources.{source_name} 아래에 추가해주세요."
+        )
+    
+    return index_name, namespace
