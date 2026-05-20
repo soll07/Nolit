@@ -2,7 +2,7 @@
 recommender/rag/embeddings.py
 
 [ 역할 ]
-  - FAISS 인덱스 생성 및 저장 전담
+  - Pinecone 인덱스 생성 및 저장 전담
   - OpenAI (1536차원) / HuggingFace (768차원) 두 엔진 지원
   - config.yaml에서 설정, loader.py에서 데이터 수신
 
@@ -12,17 +12,25 @@ recommender/rag/embeddings.py
   python manage.py embed_contents --source bbabang_stats
 """
 
-import json
 import os
 import time
+import math
 import numpy as np
-import faiss
 import openai
+import faiss
 from pathlib import Path
 from dotenv import load_dotenv
 from tqdm import tqdm
+from pinecone import Pinecone, ServerlessSpec
 
-from .config import get_config, get_data_dir, get_embedding_cfg, list_sources
+from .config import (
+    get_config,
+    get_data_dir,
+    get_embedding_cfg,
+    get_pinecone_cfg,
+    get_source_pinecone,
+    list_sources,
+)
 from .loader import load_source
 
 
@@ -34,7 +42,8 @@ _cfg     = get_config()
 _emb_cfg = get_embedding_cfg()
 
 load_dotenv(Path(__file__).resolve().parent.parent.parent / _cfg["paths"]["env_file"])
-openai.api_key = os.getenv("OPENAI_API_KEY")
+openai.api_key   = os.getenv("OPENAI_API_KEY")
+PINECONE_API_KEY = os.getenv("PINECONE_API_KEY")
 
 OPENAI_MODEL = _emb_cfg["openai_model"]
 HF_MODEL     = _emb_cfg["hf_model"]
@@ -55,7 +64,7 @@ def _get_hf_model():
 
 
 # ══════════════════════════════════════════════
-# 1. OpenAI 임베딩
+# 1. OpenAI 임베딩 (변경 없음)
 # ══════════════════════════════════════════════
 
 def _truncate(text: str) -> str:
@@ -87,53 +96,7 @@ def _openai_batch(batch: list[str]) -> list[list[float]]:
             return results
 
 
-
 def _embed_openai(texts: list[str], use_ckpt: bool, ckpt_dir: Path) -> np.ndarray:
-#     """OpenAI 전체 임베딩 — 체크포인트 유무에 따라 분기"""
-#     texts = [_truncate(t) for t in texts]
-
-#     # 체크포인트 없는 버전 (소용량)
-#     if not use_ckpt:
-#         all_emb = []
-#         total   = (len(texts) + BATCH_SIZE - 1) // BATCH_SIZE
-#         start   = time.time()
-#         for i in tqdm(range(total), desc="  OpenAI 임베딩"):
-#             batch = texts[i * BATCH_SIZE: (i + 1) * BATCH_SIZE]
-#             all_emb.extend(_openai_batch(batch))
-#         print(f"  소요: {(time.time()-start)/60:.1f}분")
-#         return np.array(all_emb, dtype="float32")
-
-#     # 체크포인트 있는 버전 (대용량)
-#     ckpt_dir.mkdir(exist_ok=True)
-#     saved       = sorted(ckpt_dir.glob("chunk_*.npy"))
-#     start_idx   = len(saved) * 1000
-#     chunk_emb   = []
-#     chunk_idx   = len(saved)
-#     total_batch = (len(texts) + BATCH_SIZE - 1) // BATCH_SIZE
-#     start       = time.time()
-
-#     print(f"  체크포인트 {len(saved)}개 확인 → {start_idx:,}번부터 재개")
-
-#     for i in tqdm(range(start_idx // BATCH_SIZE, total_batch), desc="  OpenAI 임베딩"):
-#         batch = texts[i * BATCH_SIZE: (i + 1) * BATCH_SIZE]
-#         chunk_emb.extend(_openai_batch(batch))
-
-#         if len(chunk_emb) >= 1000:
-#             f = ckpt_dir / f"chunk_{chunk_idx:04d}.npy"
-#             np.save(str(f), np.array(chunk_emb[:1000], dtype="float32"))
-#             tqdm.write(f"  청크 저장: {f.name}")
-#             chunk_emb = chunk_emb[1000:]
-#             chunk_idx += 1
-
-#     if chunk_emb:
-#         f = ckpt_dir / f"chunk_{chunk_idx:04d}.npy"
-#         np.save(str(f), np.array(chunk_emb, dtype="float32"))
-
-#     all_chunks = sorted(ckpt_dir.glob("chunk_*.npy"))
-#     embeddings = np.concatenate([np.load(str(c)) for c in all_chunks], axis=0)
-#     print(f"  소요: {(time.time()-start)/60:.1f}분")
-#     return embeddings
-
     """OpenAI 전체 임베딩 — 체크포인트 유무에 따라 분기"""
     texts = [_truncate(t) for t in texts]
 
@@ -174,34 +137,27 @@ def _embed_openai(texts: list[str], use_ckpt: bool, ckpt_dir: Path) -> np.ndarra
         f = ckpt_dir / f"chunk_{chunk_idx:04d}.npy"
         np.save(str(f), np.array(chunk_emb, dtype="float32"))
 
-    # ✅ 여기서부터 수정 — memmap으로 디스크에 쓰면서 합치기
-    all_chunks = sorted(ckpt_dir.glob("chunk_*.npy"))
+    all_chunks  = sorted(ckpt_dir.glob("chunk_*.npy"))
+    total_rows  = sum(np.load(str(c), mmap_mode='r').shape[0] for c in all_chunks)
+    n_dim       = np.load(str(all_chunks[0]), mmap_mode='r').shape[1]
 
-    # 1) 전체 행(row) 수를 먼저 파악 (각 청크 파일 헤더만 읽음, RAM 거의 안 씀)
-    total_rows = sum(np.load(str(c), mmap_mode='r').shape[0] for c in all_chunks)
-    n_dim      = np.load(str(all_chunks[0]), mmap_mode='r').shape[1]
-    print(f"  총 임베딩 수: {total_rows:,} / 차원: {n_dim}")
-
-    # 2) memmap 파일 생성 — RAM 대신 디스크에 저장하면서 합침
     merged_path = ckpt_dir / "merged.npy"
     embeddings  = np.lib.format.open_memmap(
         str(merged_path), mode='w+', dtype='float32', shape=(total_rows, n_dim)
     )
-
-    # 3) 청크를 하나씩 읽어서 합친 파일에 기록 (RAM은 청크 1개 분량만 사용)
     idx = 0
     for c in tqdm(all_chunks, desc="  청크 병합"):
         chunk = np.load(str(c), mmap_mode='r')
         embeddings[idx: idx + chunk.shape[0]] = chunk
         idx += chunk.shape[0]
-        del chunk  # 즉시 메모리 해제
+        del chunk
 
     print(f"  소요: {(time.time()-start)/60:.1f}분")
     return embeddings
 
 
 # ══════════════════════════════════════════════
-# 2. HuggingFace 임베딩 (bbabang 전용)
+# 2. HuggingFace 임베딩 (변경 없음)
 # ══════════════════════════════════════════════
 
 def _embed_hf(texts: list[str]) -> np.ndarray:
@@ -211,42 +167,142 @@ def _embed_hf(texts: list[str]) -> np.ndarray:
     embeddings = model.encode(
         texts,
         show_progress_bar=True,
-        normalize_embeddings=True,
+        normalize_embeddings=True,  # ← 정규화 True → dotproduct = cosine 유사도
         batch_size=64,
     )
     return embeddings.astype(np.float32)
 
 
 # ══════════════════════════════════════════════
-# 3. FAISS 저장
+# 3. Pinecone 저장 (FAISS → Pinecone으로 교체)
 # ══════════════════════════════════════════════
 
-def _save_faiss(
-    embeddings : np.ndarray,
-    metas      : list[dict],
-    index_path : Path,
-    meta_path  : Path,
-    index_type : str = "L2",
+def _get_pinecone_client() -> Pinecone:
+    """Pinecone 클라이언트 반환"""
+    if not PINECONE_API_KEY:
+        raise EnvironmentError(
+            "PINECONE_API_KEY가 없습니다.\n"
+            ".env 파일에 PINECONE_API_KEY=your_key 를 추가해주세요."
+        )
+    return Pinecone(api_key=PINECONE_API_KEY)
+
+
+def _get_or_create_index(pc: Pinecone, index_name: str, dim: int, metric: str):
+    """
+    Pinecone 인덱스 없으면 생성, 있으면 metric 검증 후 반환
+
+    Args:
+        pc         : Pinecone 클라이언트
+        index_name : 인덱스명 (예: "nolit-boardgame")
+        dim        : 벡터 차원수 (OpenAI=1536, HuggingFace=768)
+        metric     : 유사도 방식 (OpenAI="cosine", HuggingFace="dotproduct")
+
+    Note:
+        Pinecone은 인덱스 생성 후 metric 변경 불가.
+        이미 존재하는 인덱스의 metric이 다르면 경고 출력.
+    """
+    existing_names = pc.list_indexes().names()
+
+    if index_name not in existing_names:
+        print(f"  🆕 인덱스 생성 중: {index_name} (dim={dim}, metric={metric})")
+        pc.create_index(
+            name=index_name,
+            dimension=dim,
+            metric=metric,
+            spec=ServerlessSpec(cloud="aws", region="us-east-1")
+        )
+        print(f"  ✅ 인덱스 생성 완료: {index_name}")
+    else:
+        # 이미 존재하면 metric 검증
+        existing_info   = pc.describe_index(index_name)
+        existing_metric = existing_info.metric
+
+        if existing_metric != metric:
+            print(
+                f"  ⚠️  경고: [{index_name}] 기존 metric={existing_metric}, "
+                f"요청 metric={metric} — 기존 인덱스 그대로 사용합니다.\n"
+                f"     metric을 바꾸려면 Pinecone 콘솔에서 인덱스를 삭제 후 재생성하세요."
+            )
+        else:
+            print(f"  ✔  인덱스 이미 존재: {index_name} (metric={existing_metric})")
+
+    return pc.Index(index_name)
+
+
+def _clean_metadata(meta: dict) -> dict:
+    """
+    Pinecone 메타데이터 정제
+
+    Pinecone이 저장 못 하는 타입 변환:
+      None       → 빈 문자열 ""
+      NaN        → 빈 문자열 ""
+      list       → " | " 로 합친 문자열
+      dict       → 문자열로 변환 (예: category_rank)
+      그 외      → 그대로
+    """
+    cleaned = {}
+    for key, val in meta.items():
+        if val is None:
+            cleaned[key] = ""
+        elif isinstance(val, float) and math.isnan(val):
+            cleaned[key] = ""
+        elif isinstance(val, list):
+            cleaned[key] = " | ".join(str(v) for v in val)
+        elif isinstance(val, dict):
+            cleaned[key] = str(val)   # {"Overall": 1.0, ...} → 문자열로 저장
+        else:
+            cleaned[key] = val
+    return cleaned
+
+
+def _save_pinecone(
+    embeddings  : np.ndarray,
+    metas       : list[dict],
+    index_name  : str,
+    namespace   : str,
+    source_name : str,
+    metric      : str,
+    batch_size  : int = 100,
 ):
     """
-    FAISS 인덱스 + 메타데이터 저장.
-    - OpenAI → IndexFlatL2  (L2 거리)
-    - HuggingFace → IndexFlatIP (내적, normalize 후 코사인 유사도)
+    벡터 + 메타데이터를 Pinecone에 저장
+
+    Args:
+        embeddings  : shape (N, dim) float32 벡터
+        metas       : 메타데이터 딕셔너리 리스트
+        index_name  : Pinecone 인덱스명 (예: "nolit-boardgame")
+        namespace   : 네임스페이스 (예: "bgg_stats")
+        source_name : 벡터 ID 접두사용 (예: "bgg_stats_1")
+        metric      : 유사도 방식 (예: "cosine" | "dotproduct")
+        batch_size  : 한 번에 upsert할 벡터 수 (기본 100)
     """
-    dim = embeddings.shape[1]
+    pc    = _get_pinecone_client()
+    dim   = embeddings.shape[1]
+    total = len(metas)
 
-    if index_type == "IP":
-        index = faiss.IndexFlatIP(dim)
-    else:
-        index = faiss.IndexFlatL2(dim)
+    # 인덱스 없으면 생성, 있으면 metric 검증
+    index = _get_or_create_index(pc, index_name, dim, metric)
 
-    index.add(embeddings)
-    faiss.write_index(index, str(index_path))
-    print(f"  [FAISS] {index_path.name}  ({index.ntotal:,}개 벡터, dim={dim})")
+    print(f"  Pinecone 저장 시작: {total:,}개 → {index_name}/{namespace}")
 
-    with open(meta_path, "w", encoding="utf-8") as f:
-        json.dump(metas, f, ensure_ascii=False, indent=2)
-    print(f"  [메타]  {meta_path.name}  ({len(metas):,}개)")
+    vectors = []
+    for i in tqdm(range(total), desc="  Pinecone upsert"):
+        vectors.append({
+            "id"      : f"{source_name}_{i + 1}",      # 예: bgg_stats_1
+            "values"  : embeddings[i].tolist(),          # float32 → list[float]
+            "metadata": _clean_metadata(metas[i]),       # 정제된 메타데이터
+        })
+
+        # batch_size마다 한 번씩 upsert
+        if len(vectors) == batch_size:
+            index.upsert(vectors=vectors, namespace=namespace)
+            vectors = []
+
+    # 남은 벡터 마저 upsert
+    if vectors:
+        index.upsert(vectors=vectors, namespace=namespace)
+
+    print(f"  ✅ Pinecone 저장 완료: {total:,}개 ({index_name}/{namespace})")
 
 
 # ══════════════════════════════════════════════
@@ -258,8 +314,8 @@ def run_embedding(source_name: str):
     단일 데이터소스 임베딩 실행.
     management command / 외부 스크립트에서 호출.
     """
-    cfg      = get_config()
-    sources  = cfg["sources"]
+    cfg     = get_config()
+    sources = cfg["sources"]
 
     if source_name not in sources:
         raise ValueError(
@@ -267,13 +323,17 @@ def run_embedding(source_name: str):
             f"사용 가능: {list(sources.keys())}"
         )
 
-    src_cfg   = sources[source_name]
-    engine    = src_cfg.get("engine", "openai")
-    use_ckpt  = src_cfg.get("use_ckpt", False)
-    data_dir  = get_data_dir()
+    src_cfg  = sources[source_name]
+    engine   = src_cfg.get("engine", "openai")
+    use_ckpt = src_cfg.get("use_ckpt", False)
+    data_dir = get_data_dir()
+
+    # config.py에서 Pinecone 인덱스명 + 네임스페이스 가져오기
+    index_name, namespace = get_source_pinecone(source_name)
 
     print(f"\n{'='*52}")
     print(f"  [{source_name}]  engine={engine}  ckpt={use_ckpt}")
+    print(f"  → Pinecone: {index_name} / {namespace}")
     print(f"{'='*52}")
 
     # 1. 데이터 로드
@@ -281,24 +341,28 @@ def run_embedding(source_name: str):
     print(f"  로드 완료: {len(texts):,}개")
 
     # 2. 임베딩 생성
+    #    engine에 따라 임베딩 방식과 metric이 달라짐
+    #    - hf      : normalize=True → dotproduct (= cosine 유사도)
+    #    - openai  : 정규화 없음    → cosine
     ckpt_dir = data_dir / f"ckpt_{source_name}"
 
     if engine == "hf":
         embeddings = _embed_hf(texts)
-        index_type = "IP"   # HuggingFace → 내적 (코사인 유사도)
+        metric     = "dotproduct"   # 정규화된 벡터 → 내적
     else:
         embeddings = _embed_openai(texts, use_ckpt, ckpt_dir)
-        index_type = "L2"   # OpenAI → L2 거리
+        metric     = "cosine"       # OpenAI → 코사인
 
-    print(f"  임베딩 shape: {embeddings.shape}")
+    print(f"  임베딩 shape: {embeddings.shape}  metric: {metric}")
 
-    # 3. FAISS + 메타 저장
-    _save_faiss(
-        embeddings,
-        metas,
-        index_path = data_dir / src_cfg["index"],
-        meta_path  = data_dir / src_cfg["meta"],
-        index_type = index_type,
+    # 3. Pinecone 저장
+    _save_pinecone(
+        embeddings  = embeddings,
+        metas       = metas,
+        index_name  = index_name,
+        namespace   = namespace,
+        source_name = source_name,
+        metric      = metric,
     )
 
     print(f"\n  ✅ [{source_name}] 완료!\n")
@@ -316,32 +380,25 @@ def run_all():
 # 5. retriever.py에서 사용하는 로드 함수
 # ══════════════════════════════════════════════
 
-def load_index(source_name: str) -> tuple[faiss.Index, list]:
+def load_index(source_name: str) -> tuple:
     """
-    저장된 FAISS 인덱스 + 메타데이터 로드.
+    Pinecone 인덱스 연결 반환.
     retriever.py에서 검색 시 사용.
 
     Returns:
-        (faiss.Index, list[dict])
+        (pinecone.Index, namespace: str)
+
+    변경 전: (faiss.Index, list[dict])
+    변경 후: (pinecone.Index, namespace)
+        → retriever.py에서 metas를 직접 들고 다니지 않아도 됨
+          Pinecone이 메타데이터를 검색 결과에 포함해서 반환하기 때문
     """
-    cfg      = get_config()
-    src_cfg  = cfg["sources"][source_name]
-    data_dir = get_data_dir()
+    index_name, namespace = get_source_pinecone(source_name)
 
-    index_path = data_dir / src_cfg["index"]
-    meta_path  = data_dir / src_cfg["meta"]
+    pc    = _get_pinecone_client()
+    index = pc.Index(index_name)
 
-    if not index_path.exists():
-        raise FileNotFoundError(
-            f"인덱스 없음: {index_path}\n"
-            f"먼저 실행: python manage.py embed_contents --source {source_name}"
-        )
-
-    index = faiss.read_index(str(index_path))
-    with open(meta_path, "r", encoding="utf-8") as f:
-        metas = json.load(f)
-
-    return index, metas
+    return index, namespace
 
 
 def get_query_embedding(text: str, engine: str = "openai") -> np.ndarray:
@@ -363,5 +420,5 @@ def get_query_embedding(text: str, engine: str = "openai") -> np.ndarray:
     else:
         response = openai.embeddings.create(input=[text], model=OPENAI_MODEL)
         vec      = np.array(response.data[0].embedding, dtype="float32").reshape(1, -1)
-        faiss.normalize_L2(vec)
+        faiss.normalize_L2(vec)   # 검색 전 정규화 (코사인 유사도 정확도 향상)
         return vec
