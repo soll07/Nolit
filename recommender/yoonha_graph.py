@@ -603,6 +603,37 @@ def _extract_escape_prefs(query: str) -> dict[str, bool]:
     return prefs
 
 
+def _extract_scene_category(query: str) -> str | None:
+    """
+    머더미스터리 쿼리에서 scene_category를 추출한다.
+
+    [머미나우 실제 값]
+        "보드게임" : 보드게임형 진행 방식
+        "테마공연" : 배우 참여형 / 공연 형식
+        "플랫폼"   : 앱/플랫폼 기반
+        "개인운영" : 소규모 개인 운영
+
+    Returns:
+        "보드게임" | "테마공연" | "플랫폼" | "개인운영" | None
+    """
+    if not query:
+        return None
+
+    if any(kw in query for kw in ["보드게임형", "보드 게임형", "보드게임 방식"]):
+        return "보드게임"
+
+    if any(kw in query for kw in ["배우", "공연", "테마공연", "배우 참여", "퍼포먼스", "라이브"]):
+        return "테마공연"
+
+    if any(kw in query for kw in ["앱", "플랫폼", "온라인"]):
+        return "플랫폼"
+
+    if any(kw in query for kw in ["개인운영", "소규모", "개인 운영"]):
+        return "개인운영"
+
+    return None
+
+
 def _extract_boardgame_category(query: str) -> str | None:
     """
     query에서 보드게임 BGG 카테고리를 추출한다.
@@ -697,6 +728,13 @@ def _merge_group_from_query(
             mechanism = _extract_boardgame_mechanism(query)
             if mechanism is not None:
                 merged["mechanism"] = mechanism
+
+    # ── murdermystery 전용 조건 추출 ──
+    if category == "murdermystery":
+        if "scene_category" not in merged:
+            scene_category = _extract_scene_category(query)
+            if scene_category is not None:
+                merged["scene_category"] = scene_category
 
     # ── escape(방탈출) 전용 조건 추출 ──
     if category == "escape":
@@ -1300,7 +1338,7 @@ def node_tag_filter(state: PipelineState) -> dict[str, Any]:
     from recommender.rag.yoonha_tag_filter import filter_and_score
 
     group = state.get("group", {})
-    horror_tolerance = group.get("horror_tolerance", 1)   # None이면 공포 가능(2)으로 처리
+    horror_tolerance = group.get("horror_tolerance", 1)   # None이면 약간 공포 허용(1)으로 처리
 
     filtered = filter_and_score(
         items=items,
@@ -1499,13 +1537,13 @@ def build_graph():
     workflow.add_node("planner",             node_planner)
 
     workflow.set_entry_point("normalize_input")
-    workflow.add_edge("normalize_input", "check_sufficiency")
+    workflow.add_edge("normalize_input",     "check_sufficiency")
     workflow.add_conditional_edges(
         "check_sufficiency",
         route_after_sufficiency,
         {
-            "clarify":          "clarify",
-            "conflict_detect":  "conflict_detect",
+            "conflict_detect": "conflict_detect",
+            "clarify":         "clarify",
         },
     )
     workflow.add_edge("clarify",             END)
@@ -1520,25 +1558,33 @@ def build_graph():
     return workflow.compile()
 
 
-# 모듈 임포트 시 그래프를 즉시 컴파일해 캐싱 -- 매 요청마다 재생성 방지
-# 외부에서는 graph 직접 사용보다 run_pipeline() 함수를 통해 호출
 graph = build_graph()
 
 
-
 def run_pipeline(
-    user_text="",
-    group=None,
-    category="boardgame",
-    use_api=True,
-):
+    query: str = "",
+    category: str = "boardgame",
+    use_api: bool = True,
+    user_text: str = "",
+    group: dict | None = None,
+) -> dict:
+    """외부 호출용 단일 진입점.
+
+    Args:
+        query:     사용자 자연어 입력 (user_text와 동일)
+        user_text: views.py에서 전달하는 자연어 맥락
+        group:     슬롯 추출 결과 dict (재파싱 방지용 직접 전달)
+        category:  boardgame | murdermystery | escape
+        use_api:   True=OpenAI API 사용, False=로컬 fallback
+
+    Returns:
+        dict: answer, games, next_question 포함
     """
-    views.py wrapper around graph.invoke().
-    """
-    return graph.invoke({
-        "query":     user_text,
-        "user_text": user_text,
+    result = graph.invoke({
+        "query":     query or user_text,
+        "user_text": user_text or query,
         "category":  category,
-        "group":     group or {},
         "use_api":   use_api,
+        "group":     group or {},
     })
+    return result

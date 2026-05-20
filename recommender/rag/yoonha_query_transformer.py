@@ -82,6 +82,13 @@ MM_ANCHORS = {
     "default": ["구두룡 저택의 살인"],
 }
 
+# weight_pref별 앵커 — 카테고리 앵커보다 우선 적용
+# light 요청 시 heavy 카테고리 앵커(Brass: Birmingham 등)가 FAISS를 잘못 끌어당기는 문제 방지
+WEIGHT_ANCHORS = {
+    "light": ["Codenames", "Ticket to Ride", "Carcassonne"],
+    "heavy": ["Brass: Birmingham", "Twilight Struggle", "Arkham Horror"],
+}
+
 
 def _normalize_difficulty_pref(group):
     return group.get("difficulty_pref") or group.get("weight_pref")
@@ -142,6 +149,11 @@ def _build_query_text(user_text, group, category):
         for pref_key, text in ESCAPE_PREF_TEXT_MAP.items():
             if group.get(pref_key):
                 parts.append(text)
+        activity_level = group.get("activity_level")
+        if activity_level == "조용":
+            parts.append("조용한 정적인 차분한")
+        elif activity_level == "활발":
+            parts.append("활발한 활동적인 액티브")
 
     return " ".join(parts)
 
@@ -218,6 +230,12 @@ def _build_query_filter(group, category):
         for pref_key in ("prefer_puzzle", "prefer_story", "prefer_interior", "prefer_production"):
             if group.get(pref_key):
                 query_filter[pref_key] = True
+        activity_level = group.get("activity_level")
+        if activity_level:
+            activity_pref_map = {"조용": "low", "보통": "medium", "활발": "high"}
+            activity_pref = activity_pref_map.get(activity_level)
+            if activity_pref:
+                query_filter["activity_pref"] = activity_pref
 
     return query_filter
 
@@ -256,6 +274,11 @@ def _build_emotion_tags(group):
 
 def _build_anchor_titles(group, category):
     if category == "boardgame":
+        weight_pref = group.get("weight_pref")
+        # light/heavy 명시 시 weight 앵커 우선 — 카테고리 앵커와 충돌 방지
+        # (예: Strategy + light → Brass: Birmingham 같은 heavy 앵커 대신 가벼운 앵커 사용)
+        if weight_pref in WEIGHT_ANCHORS:
+            return WEIGHT_ANCHORS[weight_pref]
         cat = group.get("category")
         if cat and cat in BOARDGAME_ANCHORS:
             return BOARDGAME_ANCHORS[cat]
