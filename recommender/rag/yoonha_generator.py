@@ -159,6 +159,11 @@ def _build_context(
         lines.append(f"- 카테고리: {group['category']}")
     if group.get("mechanism"):
         lines.append(f"- 메커니즘: {group['mechanism']}")
+    if group.get("scene_category"):
+        lines.append(f"- 작품 유형: {group['scene_category']}")
+    if group.get("activity_level"):
+        label = {"조용": "조용한 활동 선호", "보통": "보통", "활발": "활발한 활동 선호"}
+        lines.append(f"- 활동성: {label.get(group['activity_level'], group['activity_level'])}")
 
     if emotion_tags:
         lines.append(f"- 감정 태그: {', '.join(emotion_tags)}")
@@ -323,10 +328,17 @@ def generate(
     # ── 원본 아이템 메타데이터를 games에 병합 ──
     # LLM이 생성한 title로 원본 아이템을 매칭하여
     # final_score, emotion_tags, source, 이미지 등을 추가
+    def _normalize(s: str) -> str:
+        """타이틀 매칭용 정규화: 소문자 + 공백 압축 + 특수문자 제거."""
+        import re as _re
+        return _re.sub(r"[\s\-:：·]+", " ", (s or "").lower()).strip()
+
     for game in result.get("games", []):
+        game_title_norm = _normalize(game.get("title", ""))
         matched_item = next(
             (it for it in items[:max_items]
-             if it.get("title") == game.get("title") or it.get("name") == game.get("title")),
+             if _normalize(it.get("title", "")) == game_title_norm
+             or _normalize(it.get("name", "")) == game_title_norm),
             None,
         )
         if matched_item:
@@ -435,14 +447,15 @@ def generate_without_api(
     else:
         answer = "조건에 맞는 추천 결과를 찾지 못했습니다."
 
-    # ── 역질문 생성 (부족한 조건 우선) ──
-    next_question = "추천이 마음에 드셨나요?"
+    # ── 역질문 생성 ──
     if not group.get("weight_pref"):
-        next_question = "게임 난이도는 어느 정도가 좋으세요? (가벼운 / 보통 / 어려운)"
+        next_question = "게임 난이도는 어느 정도를 원하시나요? (가벼운/보통/어려운)"
     elif not group.get("play_time"):
-        next_question = "플레이 시간은 어느 정도를 생각하고 계세요?"
+        next_question = "플레이 시간은 얼마나 여유가 있으신가요?"
     elif not group.get("relation"):
-        next_question = "함께 하시는 분들과의 관계가 어떻게 되나요? (친구, 연인, 직장동료, 첫만남)"
+        next_question = "함께 하시는 분들은 어떤 관계인가요? (친구/커플/직장 동료 등)"
+    else:
+        next_question = "추천이 마음에 드셨나요? 더 원하시는 조건이 있으면 알려주세요."
 
     return {
         "answer": answer,

@@ -211,6 +211,14 @@ def hard_filter(item: dict, query_filter: dict) -> bool:
         if item_time is not None and item_time > time_limit:
             return False
 
+    # 공포 — horror_pref="low"(공포 없음 선택) 시 horror > 2.0 제외
+    # horror 데이터가 없는 아이템은 통과 (알 수 없음으로 처리)
+    horror_pref = query_filter.get("horror_pref")
+    if horror_pref == "low":
+        item_horror = _as_number(item.get("horror"), default=None)
+        if item_horror is not None and item_horror > 2.0:
+            return False
+
     return True
 
 
@@ -286,6 +294,19 @@ def _metadata_weight(item: dict, query_filter: dict) -> float:
         production = _as_number(item.get("production"), default=None)
         if production is not None:
             score += min(production / 6.5, 1.0) * 5.0
+
+    # 8. activity: 쿼리 방향에 따라 (0~5, 높을수록 활동적)
+    activity_pref = query_filter.get("activity_pref")
+    activity = _as_number(item.get("activity"), default=None)
+    if activity_pref and activity is not None:
+        if activity_pref == "low":
+            # 조용한 활동 선호 → activity 낮을수록 가점
+            score += max(0.0, (5.0 - activity) / 5.0) * 6.0
+        elif activity_pref == "high":
+            # 활발한 활동 선호 → activity 높을수록 가점
+            score += (activity / 5.0) * 6.0
+        elif activity_pref == "medium":
+            score += max(0.0, 1.0 - abs(activity - 2.5) / 2.5) * 4.0
 
     return score
 
