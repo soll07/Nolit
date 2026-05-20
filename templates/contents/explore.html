@@ -480,7 +480,7 @@
                 {% for tag in act.tags %}
                 <span class="badge badge-teal">{{ tag }}</span>
                 {% endfor %}
-                <!-- {% if act.horror %} -->
+                {% if act.horror %}
                     {% if act.horror == '공포 강함' or act.horror == '공포 있음' %}
                         <span class="badge badge-red">👻 {{ act.horror }}</span>
                     {% else %}
@@ -505,14 +505,14 @@
     <div style="display:flex; justify-content:center; align-items:center; gap:8px; padding:32px 0;">
         {% if has_prev %}
         <a href="?category={{ sel_category }}&search={{ sel_search }}&difficulty={{ sel_difficulty }}&page={{ page_obj.previous_page_number }}"
-           class="filter-btn" style="text-decoration:none">← 이전</a>
+           class="filter-btn" style="text-decoration:none; display:flex; align-items:center; justify-content:center;">← 이전</a>
         {% endif %}
         <span style="font-size:13px; color:#7A7469; font-weight:600">
-            {{ page_num }} / {{ page_obj.paginator.num_pages }}페이지 (전체 {{ total }}개)
+            {{ page_num }} / {{ page_obj.paginator.num_pages }} 페이지 (전체 {{ total }}개)
         </span>
         {% if has_next %}
         <a href="?category={{ sel_category }}&search={{ sel_search }}&difficulty={{ sel_difficulty }}&page={{ page_obj.next_page_number }}"
-           class="filter-btn" style="text-decoration:none">다음 →</a>
+           class="filter-btn" style="text-decoration:none; display:flex; align-items:center; justify-content:center;">다음 →</a>
         {% endif %}
     </div>
     {% endif %}
