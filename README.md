@@ -12,13 +12,13 @@
 
 ## ✨ Key Features
 
-| | 기능 | 설명                                                                         |
-|---|---|----------------------------------------------------------------------------|
+| | 기능 | 설명 |
+|---|---|---|
 | 🗣️ | **Clarifying Question 인터랙션** | 사용자가 조건을 미리 입력하지 않아도 AI가 역질문으로 인원 · 관계 · 공포 수용도 · 예산을 끌어냄 (LangGraph HITL) |
-| 🔍 | **BM25 + FAISS 하이브리드 검색** | BM25 + Dense(FAISS) 기반 RRF 하이브리드 검색, 카테고리별 소스 자동 라우팅                       |
-| 🏷️ | **감정 태그 필터링** | 후기 텍스트에서 공포 · 난이도 · 분위기 · 인원 4차원 라이트 태깅 후 메타데이터 기반 필터 적용                   |
-| ⚖️ | **메타데이터 가중치 재정렬** | 하드 필터(인원 · 시간 · 지역) + 소프트 가중치(평점 · 복잡도 · 공포도)로 검색 결과 정밀 보정                 |
-| 🛡️ | **실패 방지 중심 추천** | "이게 좋습니다"가 아닌 "이 선택이면 이렇게 될 수 있습니다"를 근거와 함께 제시                             |
+| 🔍 | **BM25 + FAISS 하이브리드 검색** | BM25 + Dense(FAISS) 기반 RRF 하이브리드 검색, 카테고리별 소스 자동 라우팅 |
+| 🏷️ | **감정 태그 필터링** | 후기 텍스트에서 공포 · 난이도 · 분위기 · 인원 4차원 라이트 태깅 후 메타데이터 기반 필터 적용 |
+| ⚖️ | **메타데이터 가중치 재정렬** | 하드 필터(인원 · 시간 · 지역) + 소프트 가중치(평점 · 복잡도 · 공포도)로 검색 결과 정밀 보정 |
+| 🛡️ | **실패 방지 중심 추천** | "이게 좋습니다"가 아닌 "이 선택이면 이렇게 될 수 있습니다"를 근거와 함께 제시 |
 
 ---
 
@@ -81,34 +81,25 @@ python manage.py runserver
 
 ## 🏗️ 시스템 아키텍처
 
-```
-사용자 입력 (자연어 + 그룹 조건)
-│
-▼
-Normalize Input ──── query · category 정규화, group 조건 파싱
-│
-▼
-Check Sufficiency ── query · category · headcount 최소 조건 판단
-│
-├─ 부족 → Clarify (역질문 생성) → END
-│
-▼ 충분
-Query Transformer ── 검색용 query_text · query_filter · emotion_tags 변환
-│
-▼
-Hybrid Retriever ─── BM25 + Dense(FAISS) → RRF 융합
-│                    카테고리별 소스 자동 라우팅
-│                    (boardgame / murdermystery / escape)
-│
-▼
-Tag Filter ───────── 감정 태그 기반 필터링
-│
-▼
-Generator ────────── LLM / 룰 기반 추천 생성
-│
-▼
-최종 결과 반환
-```
+<p align="center">
+  <img src="./assets/Architecture.png" alt="System Architecture" width="680">
+</p>
+
+---
+
+## 🔧 개발 파이프라인
+
+<p align="center">
+  <img src="./assets/Pipeline.png" alt="Development Pipeline" width="800">
+</p>
+
+---
+
+## 🗄️ ERD
+
+<p align="center">
+  <img src="./assets/erd.png" alt="ERD" width="800">
+</p>
 
 ---
 
@@ -303,6 +294,8 @@ Nolit/
 │   ├── rag/                    #   RAG 파이프라인 모듈
 │   └── eval/                   #   평가 스크립트
 │
+├── assets/                     # ERD 등 문서용 이미지
+├── config/                     # Django 프로젝트 설정
 ├── docs/                       # 기술 문서
 ├── static/                     # CSS, JS, 이미지
 ├── templates/                  # Django 템플릿
@@ -315,13 +308,47 @@ Nolit/
 ---
 
 ## 👥 Team FLOW
- 
-**프로젝트 기간:** 2026.03 — 2026.04
- 
-| 김민하 | 김용욱 | 배재현 | 윤지혜 | 전윤하 | 정다솔 | 홍진서 |
-|:---:|:---:|:---:|:---:|:---:|:---:|:---:|
-| <!-- 사진 --> | <!-- 사진 --> | <!-- 사진 --> | <!-- 사진 --> | <!-- 사진 --> | <!-- 사진 --> | <!-- 사진 --> |
-| 백엔드 구성 | RAG<br>PPT 제작 | 데이터 전처리 + 임베딩<br>PPT 제작<br>발표 준비 | 데이터 전처리 + 임베딩<br>프론트엔드 구성 | RAG | DB 구축<br>데이터 전처리 + 임베딩<br>프론트엔드 구성 | 백엔드 구성<br>PPT 제작 |
+
+**프로젝트 기간:** 2026.03 — 2026.05
+
+<table>
+<tr align="center">
+<td><img src="https://i.namu.wiki/i/643jgTgLVQz0BSwMlgrrBHwReXJ19iRGS5bxDMLSxsPM4GkN-uOFsy6Pp9RiX7nEasn9WvHMLs09raOXZdp55UnSOTBlyHuBGlsFQUfmEKMihNHSeDJonYr23W2RjRrrLDY0wYrSCo3vvxYkZSFmVw.webp" width="100"></td>
+<td><img src="https://i.namu.wiki/i/VohCPaLFfmciIEP95SQZBTXud_J_M9l95LoS760USuuMuH6iBoUVYxpOEdNouyoOstAkDSYwesh96YWGNE1A5gexDD3IKHA68AllqFdVQ11cpT2hKP7tHsvW5jfrL72fxynxfVEbL6XfuieFLu6fcA.webp" width="100"></td>
+<td><img src="https://i.namu.wiki/i/UNFQIgJYne_H9jkN5j24jyGY2laGmWrke_x3M-nEZkSD1J5wTNIRS7Wx_iJyGCYqcFMJ1aNHSn5HNlKF_8lM9_wR-zKUCdLHdDjRJ1Yn8X6nHJ9cOdwQP_obJfqsIVuIT4i90lSi1RpObI9txk28NQ.webp" width="100"></td>
+<td><img src="https://i.namu.wiki/i/9ox-ZTFvJTp9NnfR7lfYejD5hQuBsARibzQva-1eZYOYFig3m4OrVnxdZXNhRdmOvHzjtC5jGb9P_IXejenqrWx6j6-kLwItI1oJE08p09mdCV2DPmhoTPPs4sOh1sdzg_GpB-koxeq_upE93UXs8w.webp" width="100"></td>
+<td><img src="https://i.namu.wiki/i/4fCAU9Ybh2SEjBXvmxfujyqF8O1L7ErL8_wambUdwOsL9wOkoN_iQ9baUv1JV0xBRn33dxLfENat13pAQfDFgJ92IRe8ydxy91_YB9PRr_xehlgXqDZZZ8dtDpsoG69LeNDwvPLzvKYn8gywIlMxpQ.webp" width="100"></td>
+<td><img src="https://i.namu.wiki/i/ZnpEAAI7med8T9czv4jHEO3F_SRO0vb-vuNnvRvONC898ryjJrEiG5vUAF_nuTApH9Fe2CDjEOEHq-kSIA1AvpStjcxh0h91B1iDVP3hM3QfeR7hj7K97FxKGJDiJpfGG6t6wSK5F4fbjbFPoKr8uA.webp" width="100"></td>
+<td><img src="https://i.namu.wiki/i/4LeawTUtEIuFpBNrGYYmZDUfLflQiuQlvlU-sDR-BXgLVntn2krnY6XuBYPUgkOCEUqrdpoEHJqW2msV3JYWBTOAHoCFAYCAi7WW0tzSdO9uTbQJI2jLeUam-4O82pvIQ5Dnla5OvIqxb-njgjO2Uw.webp" width="100"></td>
+</tr>
+<tr align="center">
+<td><b>김민하</b></td>
+<td><b>김용욱</b></td>
+<td><b>배재현</b></td>
+<td><b>윤지혜</b></td>
+<td><b>전윤하</b></td>
+<td><b>정다솔</b></td>
+<td><b>홍진서</b></td>
+</tr>
+<tr align="center">
+<td><a href="https://github.com/leedhroxx"><img src="https://img.shields.io/badge/GitHub-leedhroxx-181717?style=flat-square&logo=github" /></a></td>
+<td><a href="https://github.com/yonguk12077-beep"><img src="https://img.shields.io/badge/GitHub-yonguk12077--beep-181717?style=flat-square&logo=github" /></a></td>
+<td><a href="https://github.com/rshyun24"><img src="https://img.shields.io/badge/GitHub-rshyun24-181717?style=flat-square&logo=github" /></a></td>
+<td><a href="https://github.com/jjhhyy0926"><img src="https://img.shields.io/badge/GitHub-jjhhyy0926-181717?style=flat-square&logo=github" /></a></td>
+<td><a href="https://github.com/yoonha315"><img src="https://img.shields.io/badge/GitHub-yoonha315-181717?style=flat-square&logo=github" /></a></td>
+<td><a href="https://github.com/soll07"><img src="https://img.shields.io/badge/GitHub-soll07-181717?style=flat-square&logo=github" /></a></td>
+<td><a href="https://github.com/Hong-Jin-seo"><img src="https://img.shields.io/badge/GitHub-Hong--Jin--seo-181717?style=flat-square&logo=github" /></a></td>
+</tr>
+<tr align="center">
+<td>프론트엔드 구성<br>백엔드 구성</td>
+<td>RAG<br>PPT 제작</td>
+<td>데이터 전처리 + 임베딩<br>PPT 제작<br>발표 준비</td>
+<td>데이터 전처리 + 임베딩<br>프론트엔드 구성</td>
+<td>RAG<br>README 작성</td>
+<td>DB 구축<br>데이터 전처리 + 임베딩<br>프론트엔드 구성</td>
+<td>백엔드 구성<br>PPT 제작</td>
+</tr>
+</table>
 
 ### 💬 팀원 회고
 
