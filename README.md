@@ -98,7 +98,7 @@ python manage.py runserver
 ## 🗄️ ERD
 
 <p align="center">
-  <img src="./assets/erd.png" alt="ERD" width="800">
+  <img src="./assets/ERD.png" alt="ERD" width="800">
 </p>
 
 ---
@@ -309,15 +309,15 @@ Nolit/
 
 ## 👥 Team FLOW
 
-**프로젝트 기간:** 2026.03 — 2026.05
+**프로젝트 기간:** 2026.05.11 — 2026.05.22
 
 <table>
 <tr align="center">
 <td><img src="https://i.namu.wiki/i/643jgTgLVQz0BSwMlgrrBHwReXJ19iRGS5bxDMLSxsPM4GkN-uOFsy6Pp9RiX7nEasn9WvHMLs09raOXZdp55UnSOTBlyHuBGlsFQUfmEKMihNHSeDJonYr23W2RjRrrLDY0wYrSCo3vvxYkZSFmVw.webp" width="100"></td>
 <td><img src="https://i.namu.wiki/i/VohCPaLFfmciIEP95SQZBTXud_J_M9l95LoS760USuuMuH6iBoUVYxpOEdNouyoOstAkDSYwesh96YWGNE1A5gexDD3IKHA68AllqFdVQ11cpT2hKP7tHsvW5jfrL72fxynxfVEbL6XfuieFLu6fcA.webp" width="100"></td>
 <td><img src="https://i.namu.wiki/i/UNFQIgJYne_H9jkN5j24jyGY2laGmWrke_x3M-nEZkSD1J5wTNIRS7Wx_iJyGCYqcFMJ1aNHSn5HNlKF_8lM9_wR-zKUCdLHdDjRJ1Yn8X6nHJ9cOdwQP_obJfqsIVuIT4i90lSi1RpObI9txk28NQ.webp" width="100"></td>
-<td><img src="https://i.namu.wiki/i/9ox-ZTFvJTp9NnfR7lfYejD5hQuBsARibzQva-1eZYOYFig3m4OrVnxdZXNhRdmOvHzjtC5jGb9P_IXejenqrWx6j6-kLwItI1oJE08p09mdCV2DPmhoTPPs4sOh1sdzg_GpB-koxeq_upE93UXs8w.webp" width="100"></td>
-<td><img src="https://i.namu.wiki/i/4fCAU9Ybh2SEjBXvmxfujyqF8O1L7ErL8_wambUdwOsL9wOkoN_iQ9baUv1JV0xBRn33dxLfENat13pAQfDFgJ92IRe8ydxy91_YB9PRr_xehlgXqDZZZ8dtDpsoG69LeNDwvPLzvKYn8gywIlMxpQ.webp" width="100"></td>
+<td><img src="https://i.namu.wiki/i/OtHf4ShqSsnABVcfYVxr5Ia8S7OIu9x8vsFclFvFOkZV0a1bwNbTQF-fDp4ceTBSwq5uP1WUpSgnRYGK0qtlARrY_RLiCUyaAQKxnX20PWkMTxdMP9G_QP5hVf9_4EW8FieFqpK_ieMaKg9yQb2yXA.webp" width="100"></td>
+<td><img src="https://i.namu.wiki/i/ILC7Z_cIi6QpwZxwwFe0gV07WYMBBjyWZFK92qqDSBhbQm9OhWFyQtTrXjiIoeV6_3cQ4gcOQ-7JNRG80kBnBOgN-ICfGEmaX48MXzpSgtfBxzndTW4HBAEeNv8JrHolnhqL7vlXf4sckwErld-QMA.webp" width="100"></td>
 <td><img src="https://i.namu.wiki/i/ZnpEAAI7med8T9czv4jHEO3F_SRO0vb-vuNnvRvONC898ryjJrEiG5vUAF_nuTApH9Fe2CDjEOEHq-kSIA1AvpStjcxh0h91B1iDVP3hM3QfeR7hj7K97FxKGJDiJpfGG6t6wSK5F4fbjbFPoKr8uA.webp" width="100"></td>
 <td><img src="https://i.namu.wiki/i/4LeawTUtEIuFpBNrGYYmZDUfLflQiuQlvlU-sDR-BXgLVntn2krnY6XuBYPUgkOCEUqrdpoEHJqW2msV3JYWBTOAHoCFAYCAi7WW0tzSdO9uTbQJI2jLeUam-4O82pvIQ5Dnla5OvIqxb-njgjO2Uw.webp" width="100"></td>
 </tr>
