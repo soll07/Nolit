@@ -329,13 +329,13 @@ Nolit/
 
 <table>
 <tr align="center">
-<td><img src="./assets/profile/red.png" width="100"></td>
-<td><img src="./assets/profile/orange.png" width="100"></td>
-<td><img src="./assets/profile/yellow.png" width="100"></td>
-<td><img src="./assets/profile/green.png" width="100"></td>
-<td><img src="./assets/profile/blue.png" width="100"></td>
-<td><img src="./assets/profile/navy.png" width="100"></td>
-<td><img src="./assets/profile/purple.png" width="100"></td>
+<td><img src="./assets/profile/red.png" width="110" height="110"></td>
+<td><img src="./assets/profile/orange.png" width="110" height="110"></td>
+<td><img src="./assets/profile/yellow.png" width="110" height="110"></td>
+<td><img src="./assets/profile/green.png" width="110" height="110"></td>
+<td><img src="./assets/profile/blue.png" width="110" height="110"></td>
+<td><img src="./assets/profile/navy.png" width="110" height="110"></td>
+<td><img src="./assets/profile/purple.png" width="110" height="110"></td>
 </tr>
 <tr align="center">
 <td><b>김민하</b></td>
