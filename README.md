@@ -27,12 +27,6 @@
   </table>
 </div>
 
-<p align="center">
-  <a href="https://www.figma.com/board/PAr1wnUVCpQUZmT99oeX9h/NOLIT-%ED%99%94%EB%A9%B4-%ED%9D%90%EB%A6%84%EB%8F%84?node-id=0-1&p=f">
-    <img src="https://img.shields.io/badge/Figma-프로토타입-F24E1E?style=for-the-badge&logo=figma&logoColor=white" />
-  </a>
-</p>
-
 ---
 
 ## ✨ Key Features
@@ -55,6 +49,7 @@
 | LLM & RAG | ![LangChain](https://img.shields.io/badge/LangChain-1C3C3C?style=flat-square&logo=langchain&logoColor=white) ![LangGraph](https://img.shields.io/badge/LangGraph-FF6F00?style=flat-square&logoColor=white) ![OpenAI](https://img.shields.io/badge/OpenAI-412991?style=flat-square&logo=openai&logoColor=white) ![HuggingFace](https://img.shields.io/badge/HuggingFace-FFD21E?style=flat-square&logo=huggingface&logoColor=black) |
 | Search & Storage | ![FAISS](https://img.shields.io/badge/FAISS-0467DF?style=flat-square&logoColor=white) ![Supabase](https://img.shields.io/badge/Supabase-3FCF8E?style=flat-square&logo=supabase&logoColor=white) |
 | Data Collection | ![Selenium](https://img.shields.io/badge/Selenium-43B02A?style=flat-square&logo=selenium&logoColor=white) ![Pandas](https://img.shields.io/badge/Pandas-150458?style=flat-square&logo=pandas&logoColor=white) |
+| Frontend Design | [![Figma](https://img.shields.io/badge/Figma-F24E1E?style=flat-square&logo=figma&logoColor=white)](https://www.figma.com/board/PAr1wnUVCpQUZmT99oeX9h/NOLIT-%ED%99%94%EB%A9%B4-%ED%9D%90%EB%A6%84%EB%8F%84?node-id=0-1&t=UrvyySuCIm5e623w-1) |
 
 ---
 
@@ -334,13 +329,13 @@ Nolit/
 
 <table>
 <tr align="center">
-<td><img src="https://i.namu.wiki/i/643jgTgLVQz0BSwMlgrrBHwReXJ19iRGS5bxDMLSxsPM4GkN-uOFsy6Pp9RiX7nEasn9WvHMLs09raOXZdp55UnSOTBlyHuBGlsFQUfmEKMihNHSeDJonYr23W2RjRrrLDY0wYrSCo3vvxYkZSFmVw.webp" width="100"></td>
-<td><img src="https://i.namu.wiki/i/VohCPaLFfmciIEP95SQZBTXud_J_M9l95LoS760USuuMuH6iBoUVYxpOEdNouyoOstAkDSYwesh96YWGNE1A5gexDD3IKHA68AllqFdVQ11cpT2hKP7tHsvW5jfrL72fxynxfVEbL6XfuieFLu6fcA.webp" width="100"></td>
-<td><img src="https://i.namu.wiki/i/UNFQIgJYne_H9jkN5j24jyGY2laGmWrke_x3M-nEZkSD1J5wTNIRS7Wx_iJyGCYqcFMJ1aNHSn5HNlKF_8lM9_wR-zKUCdLHdDjRJ1Yn8X6nHJ9cOdwQP_obJfqsIVuIT4i90lSi1RpObI9txk28NQ.webp" width="100"></td>
-<td><img src="https://i.namu.wiki/i/OtHf4ShqSsnABVcfYVxr5Ia8S7OIu9x8vsFclFvFOkZV0a1bwNbTQF-fDp4ceTBSwq5uP1WUpSgnRYGK0qtlARrY_RLiCUyaAQKxnX20PWkMTxdMP9G_QP5hVf9_4EW8FieFqpK_ieMaKg9yQb2yXA.webp" width="100"></td>
-<td><img src="https://i.namu.wiki/i/ILC7Z_cIi6QpwZxwwFe0gV07WYMBBjyWZFK92qqDSBhbQm9OhWFyQtTrXjiIoeV6_3cQ4gcOQ-7JNRG80kBnBOgN-ICfGEmaX48MXzpSgtfBxzndTW4HBAEeNv8JrHolnhqL7vlXf4sckwErld-QMA.webp" width="100"></td>
-<td><img src="https://i.namu.wiki/i/ZnpEAAI7med8T9czv4jHEO3F_SRO0vb-vuNnvRvONC898ryjJrEiG5vUAF_nuTApH9Fe2CDjEOEHq-kSIA1AvpStjcxh0h91B1iDVP3hM3QfeR7hj7K97FxKGJDiJpfGG6t6wSK5F4fbjbFPoKr8uA.webp" width="100"></td>
-<td><img src="https://i.namu.wiki/i/4LeawTUtEIuFpBNrGYYmZDUfLflQiuQlvlU-sDR-BXgLVntn2krnY6XuBYPUgkOCEUqrdpoEHJqW2msV3JYWBTOAHoCFAYCAi7WW0tzSdO9uTbQJI2jLeUam-4O82pvIQ5Dnla5OvIqxb-njgjO2Uw.webp" width="100"></td>
+<td><img src="./assets/profile/red.png" width="100"></td>
+<td><img src="./assets/profile/orange.png" width="100"></td>
+<td><img src="./assets/profile/yellow.png" width="100"></td>
+<td><img src="./assets/profile/green.png" width="100"></td>
+<td><img src="./assets/profile/blue.png" width="100"></td>
+<td><img src="./assets/profile/navy.png" width="100"></td>
+<td><img src="./assets/profile/purple.png" width="100"></td>
 </tr>
 <tr align="center">
 <td><b>김민하</b></td>
