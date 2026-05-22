@@ -6,7 +6,11 @@
 
 보드게임 · 방탈출 · 머더미스터리 — 6개 소스에서 수집한 데이터를 통합하고, LangGraph 4단계 파이프라인으로 **"우리 그룹에 맞는 선택"** 을 추천합니다.
 
-<!-- 스크린샷 또는 데모 GIF 추가 예정 -->
+<p align="center">
+  <img src="./assets/demo_landing.png" alt="Nolit 메인" height="300">
+  &nbsp;
+  <img src="./assets/demo_chat.png" alt="AI 추천 화면" height="300">
+</p>
 
 ---
 
@@ -79,14 +83,6 @@ python manage.py runserver
 
 ---
 
-## 🏗️ 시스템 아키텍처
-
-<p align="center">
-  <img src="./assets/Architecture.png" alt="System Architecture" width="680">
-</p>
-
----
-
 ## 🔧 개발 파이프라인
 
 <p align="center">
@@ -109,6 +105,10 @@ python manage.py runserver
 <summary><b>⚙️ RAG 파이프라인 상세</b></summary>
 
 <br>
+
+<p align="center">
+  <img src="./assets/Architecture.png" alt="RAG Pipeline Architecture" width="680">
+</p>
 
 ### 4단계 파이프라인
 
