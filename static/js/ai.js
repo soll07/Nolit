@@ -5,8 +5,7 @@ const $chatWrap = document.getElementById('chat-wrap');
 const $typing = document.getElementById('typing');
 const $input = document.getElementById('chat-input');
 const $sendBtn = document.getElementById('send-btn');
-const $recSection = document.getElementById('rec-section');
-const $recList = document.getElementById('rec-list');
+
 
 function getCookie(name) {
     const value = `; ${document.cookie}`;
@@ -76,28 +75,35 @@ function showTyping(on) {
 
 function renderRecommendations(recs) {
     const rankCls = ['', 'rank-gold', 'rank-silver', 'rank-bronze'];
-    $recList.innerHTML = recs.map(r => `
-        <div class="card" style="align-items:flex-start;">
 
-            <div>
-                <div class="rec-header" style="margin-bottom:8px;">
-                    <div class="rec-title-row">
-                        <span class="${rankCls[r.rank]}">#${r.rank}</span>
-                        <strong style="font-size:1rem; color:#2A2A2A">${escHtml(r.title)}</strong>
-                        <span class="badge badge-teal">${escHtml(r.category)}</span>
+    const section = document.createElement('div');
+    section.className = 'rec-section';
+    section.innerHTML = `
+        <h3>그룹 맞춤 추천 결과</h3>
+        <div class="rec-list">
+            ${recs.map(r => `
+                <div class="card" style="align-items:flex-start;">
+                    <div>
+                        <div class="rec-header" style="margin-bottom:8px;">
+                            <div class="rec-title-row">
+                                <span class="${rankCls[r.rank]}">#${r.rank}</span>
+                                <strong style="font-size:1rem; color:#2A2A2A">${escHtml(r.title)}</strong>
+                                <span class="badge badge-teal">${escHtml(r.category)}</span>
+                            </div>
+                            <span class="rec-rating">${r.rating}<small>/5</small></span>
+                        </div>
+                        <div class="rec-reason-row">
+                            <span class="check-mark">✓</span>
+                            <p class="rec-reason" style="margin:0;">${escHtml(r.reason)}</p>
+                        </div>
+                        <div class="evidence-box">${escHtml(r.evidence)}</div>
+                        ${r.risk ? `<div class="risk-box">⚠ ${escHtml(r.risk)}</div>` : ''}
                     </div>
-                    <span class="rec-rating">${r.rating}<small>/5</small></span>
                 </div>
-                <div class="rec-reason-row">
-                    <span class="check-mark">✓</span>
-                    <p class="rec-reason" style="margin:0;">${escHtml(r.reason)}</p>
-                </div>
-                <div class="evidence-box">${escHtml(r.evidence)}</div>
-                ${r.risk ? `<div class="risk-box">⚠ ${escHtml(r.risk)}</div>` : ''}
-            </div>
-        </div>
-    `).join('');
-    $recSection.style.display = 'block';
+            `).join('')}
+        </div>`;
+
+    $chatWrap.insertBefore(section, $typing);
     scrollChat();
 }
 
@@ -207,6 +213,7 @@ async function sendSmartMessage(text) {
 
     } catch (e) {
         showTyping(false);
+        console.error("sendSmartMessage 에러:", e);
         appendMsg('ai', '오류가 발생했습니다. 다시 시도해주세요.');
     } finally {
         $sendBtn.disabled = false;

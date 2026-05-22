@@ -21,7 +21,7 @@ SLOT_KEYS = [
 
 # 빠진 슬롯 -> 역질문 매핑
 FOLLOWUP_QUESTIONS = {
-    "domain": "어떤 활동을 원하시나요?\n· 보드게임 · 방탈출 · 머더미스터리",
+    "domain": "어떤 활동을 원하시나요?\n· 보드게임 · 방탈출 · 크라임씬",
     "person_count": "몇 명이서 활동하실 예정인가요?",
     "relationship": "처음 만나는 사이인가요, 아니면 이미 친한 사이인가요?",
     "horror_tolerance": "공포 요소에 대해 어떻게 생각하시나요?\n· 모두 괜찮음\n· 일부 민감함\n· 전체적으로 피하고 싶음",
@@ -41,7 +41,7 @@ _prompt = ChatPromptTemplate.from_messages([
 (예: 현재 힌트에 'horror_tolerance'가 있고 사용자가 "피하고 싶어"라고 했다면, 공포를 피하고 싶다는 뜻이므로 "없음"으로 처리하세요.)
 
 슬롯 정의 :
-- domain : "보드게임" | "방탈출" | "머더미스터리"
+- domain : "보드게임" | "방탈출" | "크라임씬"
 - person_count : 정수 (예: 4)
 - relationship : "친한" 또는 "처음"
 - horror_tolerance : "모두" | "일부" | "없음"

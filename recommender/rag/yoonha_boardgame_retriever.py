@@ -2,11 +2,11 @@
 recommender/rag/yoonha_boardgame_retriever.py
 
 [ 역할 ]
-  BGG + 보드라이프 통합 BM25 + FAISS RRF 하이브리드 검색
+  BGG + 보드라이프 통합 BM25 + Pinecone RRF 하이브리드 검색
 
 [ 검색 흐름 ]
   1. BM25 키워드 검색 → 키워드 매칭 기반 랭킹
-  2. FAISS dense 검색 → 의미 유사도 기반 랭킹
+  2. Pinecone dense 검색 → 의미 유사도 기반 랭킹
   3. RRF(Reciprocal Rank Fusion) → 두 랭킹을 결합
   4. 메타데이터 가중치 → 평점/카테고리/인원 등 보정
   5. 최종 total_score 계산 후 정렬
@@ -26,53 +26,87 @@ recommender/rag/yoonha_boardgame_retriever.py
   - 보드라이프 가중치 1.5배 (한국 서비스이므로 한국 데이터 우선)
 
 변경사항:
-  - faiss_bgg_reviews_meta.json 로드 → title별 review_count / review_avg / review_stdev 집계
-  - faiss_boardlife_reviews_meta.json 로드 → 동일
-  - _metadata_weight(): 리뷰 수 신뢰도 + 호불호(stdev) 반영
-  - RRF 소스 가중치: boardlife × 1.5, bgg × 1.0 (기획서 권장값)
-  - 2차 가중치: rank, avg_rating, review_count 순서로 반영
+  - FAISS 로컬 파일 로드 → Pinecone 인덱스 연결로 교체
+  - _dense_search(): index.search() → pinecone index.query()로 교체
+  - get_embedding(): index.reconstruct() → get_query_embedding()으로 교체
+  - BM25용 메타데이터는 Pinecone에서 가져온 metadata 필드 사용
+  - reviews meta: Pinecone bgg_reviews / boardlife_reviews 네임스페이스에서 집계
 """
 
 import json
 import math
 import re
 import statistics
-import faiss
 import numpy as np
 from pathlib import Path
 from rank_bm25 import BM25Okapi
 
+from recommender.rag.embeddings import load_index, get_query_embedding
+
 # -------------------------
-# 데이터 로드
+# 데이터 로드 — Pinecone 연결
 # -------------------------
-PROJECT_ROOT = Path(__file__).resolve().parents[2]
-DATA_DIR = PROJECT_ROOT / "04_vectorstore"
-# DATA_DIR = PROJECT_ROOT / "data"
+# Pinecone 인덱스 객체 + 네임스페이스
+bgg_index,  bgg_namespace  = load_index("bgg_stats")
+bl_index,   bl_namespace   = load_index("boardlife_stats")
+bgg_rev_index, bgg_rev_namespace = load_index("bgg_reviews")
+bl_rev_index,  bl_rev_namespace  = load_index("boardlife_reviews")
 
-bgg_index = faiss.read_index(str(DATA_DIR / "faiss_bgg_stats.index"))
-with open(DATA_DIR / "faiss_bgg_stats_meta.json", "r", encoding="utf-8") as f:
-    bgg_stats = json.load(f)
+# -------------------------
+# BM25용 메타데이터 로드
+# Pinecone에서 전체 메타데이터를 가져와 BM25 corpus 구성
+# -------------------------
+def _fetch_all_metadata(index, namespace: str, source_label: str) -> list[dict]:
+    items = []
+    
+    # list() 대신 query()로 데이터 가져오기
+    # 더미 벡터(0으로 채운 벡터)로 쿼리해서 전체 메타데이터 조회
+    index_info = index.describe_index_stats()
+    dim = index_info.dimension  # 인덱스 차원수 확인
+    
+    dummy_vector = [0.0] * dim
+    response = index.query(
+        vector=dummy_vector,
+        top_k=10000,           # 최대한 많이 가져오기
+        namespace=namespace,
+        include_metadata=True,
+    )
+    
+    for match in response.matches:
+        meta = dict(match.metadata or {})
+        meta["_pinecone_id"] = match.id
+        meta["source"] = source_label
+        items.append(meta)
+    
+    return items
+    # """
+    # Pinecone 인덱스에서 전체 메타데이터를 페이지 단위로 가져온다.
+    # BM25 corpus 구성 및 리뷰 집계에 사용.
+    # """
+    # items = []
+    # # Pinecone list() API로 모든 벡터 ID 조회 후 fetch
+    # for id_batch in index.list(namespace=namespace):
+    #     fetched = index.fetch(ids=id_batch, namespace=namespace)
+    #     for vec_id, vec_data in fetched.vectors.items():
+    #         meta = dict(vec_data.metadata or {})
+    #         meta["_pinecone_id"] = vec_id
+    #         meta["source"] = source_label
+    #         items.append(meta)
+    # return items
 
-bl_index = faiss.read_index(str(DATA_DIR / "faiss_boardlife_stats.index"))
-with open(DATA_DIR / "faiss_boardlife_stats_meta.json", "r", encoding="utf-8") as f:
-    bl_stats = json.load(f)
 
-for item in bgg_stats:
-    item["source"] = "bgg"
-for item in bl_stats:
-    item["source"] = "boardlife"
-
+print("[boardgame_retriever] Pinecone에서 메타데이터 로드 중...")
+bgg_stats = _fetch_all_metadata(bgg_index, bgg_namespace, "bgg")
+bl_stats  = _fetch_all_metadata(bl_index,  bl_namespace,  "boardlife")
 all_items = bgg_stats + bl_stats
-
-print(f"[boardgame_retriever] BGG: {len(bgg_stats)}개 (dim={bgg_index.d}), 보드라이프: {len(bl_stats)}개 (dim={bl_index.d})")
+print(f"[boardgame_retriever] BGG: {len(bgg_stats)}개, 보드라이프: {len(bl_stats)}개")
 
 # -------------------------
-# reviews meta 로드 및 집계
+# reviews meta 집계 — Pinecone reviews 네임스페이스에서
 # -------------------------
-
-def _build_review_map(data: list[dict]) -> dict[str, dict]:
+def _build_review_map(index, namespace: str) -> dict[str, dict]:
     """
-    reviews meta → title별 통계 dict 빌드.
+    Pinecone reviews 네임스페이스 → title별 review 통계 dict 빌드.
     {
       "Brass: Birmingham": {
           "review_count": 4557,
@@ -82,11 +116,21 @@ def _build_review_map(data: list[dict]) -> dict[str, dict]:
     }
     """
     raw: dict[str, list[float]] = {}
-    for x in data:
-        r = x.get("rating")
-        if r is None:
+    for page in index.list(namespace=namespace):
+        ids = [item.id for item in page.vectors]
+        if not ids:
             continue
-        raw.setdefault(x["title"], []).append(float(r))
+        fetched = index.fetch(ids=ids, namespace=namespace)
+        for _, vec_data in fetched.vectors.items():
+            meta = vec_data.metadata or {}
+            r = meta.get("rating")
+            title = meta.get("title")
+            if not title or r is None or r == "":
+                continue
+            try:
+                raw.setdefault(title, []).append(float(r))
+            except (ValueError, TypeError):
+                continue
 
     result = {}
     for title, ratings in raw.items():
@@ -96,14 +140,30 @@ def _build_review_map(data: list[dict]) -> dict[str, dict]:
             "review_stdev": round(statistics.stdev(ratings), 3) if len(ratings) > 1 else 0.0,
         }
     return result
+    # raw: dict[str, list[float]] = {}
+    # for id_batch in index.list(namespace=namespace):
+    #     fetched = index.fetch(ids=id_batch, namespace=namespace)
+    #     for _, vec_data in fetched.vectors.items():
+    #         meta = vec_data.metadata or {}
+    #         r = meta.get("rating")
+    #         title = meta.get("title")
+    #         if r is None or title is None:
+    #             continue
+    #         raw.setdefault(title, []).append(float(r))
+
+    # result = {}
+    # for title, ratings in raw.items():
+    #     result[title] = {
+    #         "review_count": len(ratings),
+    #         "review_avg":   round(sum(ratings) / len(ratings), 3),
+    #         "review_stdev": round(statistics.stdev(ratings), 3) if len(ratings) > 1 else 0.0,
+    #     }
+    # return result
 
 
-with open(DATA_DIR / "faiss_bgg_reviews_meta.json", "r", encoding="utf-8") as f:
-    _bgg_review_map = _build_review_map(json.load(f))
-
-with open(DATA_DIR / "faiss_boardlife_reviews_meta.json", "r", encoding="utf-8") as f:
-    _bl_review_map = _build_review_map(json.load(f))
-
+print("[boardgame_retriever] 리뷰 통계 집계 중...")
+_bgg_review_map = _build_review_map(bgg_rev_index, bgg_rev_namespace)
+_bl_review_map  = _build_review_map(bl_rev_index,  bl_rev_namespace)
 print(f"[boardgame_retriever] BGG 리뷰 집계: {len(_bgg_review_map)}개 게임")
 print(f"[boardgame_retriever] 보드라이프 리뷰 집계: {len(_bl_review_map)}개 게임")
 
@@ -114,7 +174,6 @@ def _get_review_data(item: dict) -> dict | None:
     if item.get("source") == "bgg":
         return _bgg_review_map.get(title)
     else:
-        # boardlife: title(한글) 기준으로 먼저 탐색, 없으면 title_eng로 bgg map 보조 탐색
         return _bl_review_map.get(title) or _bgg_review_map.get(item.get("title_eng", ""))
 
 
@@ -184,7 +243,6 @@ _bm25 = BM25Okapi(_tokenized_corpus)
 print(f"[boardgame_retriever] BM25 corpus 준비 완료: {len(_corpus)}개")
 
 
-
 # -------------------------
 # 메타데이터 정규화 유틸
 # -------------------------
@@ -192,7 +250,6 @@ def _as_number(value, default=None):
     """문자열/숫자 메타데이터를 float로 안전 변환. None/NaN/inf는 default로 처리."""
     if value is None:
         return default
-
     if isinstance(value, (int, float)):
         try:
             if math.isnan(value) or math.isinf(value):
@@ -200,15 +257,11 @@ def _as_number(value, default=None):
         except TypeError:
             pass
         return float(value)
-
     if isinstance(value, str):
         cleaned = value.strip().replace(",", "")
-
         if not cleaned or cleaned.lower() in {"none", "null", "nan", "na", "n/a", "?", "-"}:
             return default
-
         m = re.search(r"-?\d+(?:\.\d+)?", cleaned)
-
         if m:
             try:
                 num = float(m.group(0))
@@ -217,27 +270,22 @@ def _as_number(value, default=None):
                 return num
             except ValueError:
                 return default
-
     return default
 
 
 def _as_int(value, default=None):
     num = _as_number(value, default=None)
-
     if num is None:
         return default
-
     try:
         if math.isnan(num) or math.isinf(num):
             return default
     except TypeError:
         return default
-
     return int(num)
 
 
 def _split_tags(value) -> list[str]:
-    """list 또는 |/, 구분 문자열을 태그 리스트로 변환."""
     if value is None:
         return []
     if isinstance(value, list):
@@ -260,52 +308,37 @@ def _contains_tag(value, target: str) -> bool:
 
 
 def _parse_player_values(value) -> set[int]:
-    """
-    recommended_players / best_players가
-    int, float, list, 문자열, NaN 어떤 형태여도 안전하게 set[int]로 변환.
-    NaN/None은 데이터 없음으로 처리한다.
-    """
     values: set[int] = set()
-
     if value is None:
         return values
-
     if isinstance(value, float):
         if math.isnan(value) or math.isinf(value):
             return values
         values.add(int(value))
         return values
-
     if isinstance(value, int):
         values.add(value)
         return values
-
     if isinstance(value, list):
         for v in value:
             values |= _parse_player_values(v)
         return values
-
     if isinstance(value, dict):
         for v in value.values():
             values |= _parse_player_values(v)
         return values
-
     text = str(value).strip()
-
     if not text or text.lower() in {"none", "null", "nan", "na", "n/a", "-", "?"}:
         return values
-
     for m in re.findall(r"\d+", text):
         try:
             values.add(int(m))
         except ValueError:
             continue
-
     return values
 
 
 def _normalized_rating(item: dict) -> float | None:
-    """소스별 평점 스케일을 0~1로 정규화. None은 그대로 None."""
     rating = _as_number(item.get("avg_rating"), default=None)
     if rating is None or rating <= 0:
         return None
@@ -318,10 +351,6 @@ def _normalized_rating(item: dict) -> float | None:
 
 
 def _source_weight(item: dict, query_filter: dict) -> float:
-    """
-    소스 가중치. 한국어/한국 유저 반응 중심이면 boardlife 우선, 글로벌이면 동등.
-    기본값은 서비스 성격상 boardlife 1.5, bgg 1.0.
-    """
     pref = query_filter.get("source_pref") or query_filter.get("source_preference") or "korean"
     if pref in {"global", "bgg"}:
         return 1.0
@@ -329,16 +358,12 @@ def _source_weight(item: dict, query_filter: dict) -> float:
         return 1.5
     return 1.0
 
+
 # -------------------------
 # 하드 필터
 # -------------------------
 def hard_filter(item: dict, query_filter: dict) -> bool:
-    """
-    조건 불만족 아이템 제거. True = 통과.
-
-    하드 필터는 문서 기준으로 인원/시간처럼 명백히 조건을 벗어나는 항목만 제거한다.
-    weight는 기본적으로 가중치 영역이며, strict_weight_filter=True일 때만 제외한다.
-    """
+    """조건 불만족 아이템 제거. True = 통과."""
     players = _as_int(query_filter.get("players"), default=None)
     if players is not None:
         max_p = _as_int(item.get("max_players"), default=999)
@@ -355,7 +380,6 @@ def hard_filter(item: dict, query_filter: dict) -> bool:
         if item_time is not None and item_time > 0 and item_time > max_time:
             return False
 
-    # 선택적 엄격 필터. 일반 추천에서는 weight를 하드 제외하지 않고 rerank에만 사용한다.
     if query_filter.get("strict_weight_filter"):
         w = _as_number(item.get("weight"), default=None)
         if w is not None:
@@ -367,20 +391,14 @@ def hard_filter(item: dict, query_filter: dict) -> bool:
 
     return True
 
+
 # -------------------------
 # 메타데이터 가중치
 # -------------------------
 def _metadata_weight(item: dict, query_filter: dict) -> float:
-    """
-    메타데이터 기반 2차 가중치 계산.
-    - 평점은 소스별 정규화 후 비교한다.
-    - None은 0점이 아니라 데이터 없음으로 처리한다.
-    - source 가중치는 RRF 단계에서 한 번만 적용한다.
-    """
     score = 0.0
     source = item.get("source", "bgg")
 
-    # 1. avg_rating: source-aware normalization + 리뷰 신뢰도/호불호 보정
     normalized = _normalized_rating(item)
     if normalized is not None:
         review_data = _get_review_data(item)
@@ -394,20 +412,14 @@ def _metadata_weight(item: dict, query_filter: dict) -> float:
         else:
             score += normalized * 15.0 * 0.6
 
-    # 2. category/mechanism: 쿼리 의도 매칭 (보너스 + 미스매치 페널티)
-    #    - 태그가 매칭되면 보너스
-    #    - 데이터가 있는데 매칭 안 되면 강한 감점 (명확한 미스매치)
-    #    - 데이터 자체가 없으면 약한 감점 (불확실)
     req_category = query_filter.get("category")
     if req_category:
         item_category = item.get("category")
         if _contains_tag(item_category, req_category):
             score += 10.0
         elif item_category and _split_tags(item_category):
-            # 카테고리 데이터가 있는데 요청과 다름 → 명확한 미스매치
             score -= 10.0
         else:
-            # 카테고리 데이터 자체가 없음 → 약한 감점
             score -= 3.0
 
     req_mechanism = query_filter.get("mechanism")
@@ -420,34 +432,33 @@ def _metadata_weight(item: dict, query_filter: dict) -> float:
         else:
             score -= 2.0
 
-    # 3. 추천/베스트 인원 일치
     players = _as_int(query_filter.get("players"), default=None)
     if players is not None:
         if source == "bgg":
             rec_values = _parse_player_values(item.get("recommended_players"))
         else:
-            rec_values = _parse_player_values(item.get("best_players")) | _parse_player_values(item.get("recommend_players")) | _parse_player_values(item.get("recommended_players"))
+            rec_values = (
+                _parse_player_values(item.get("best_players"))
+                | _parse_player_values(item.get("recommend_players"))
+                | _parse_player_values(item.get("recommended_players"))
+            )
         if players in rec_values:
             score += 6.0
 
-    # 4. weight preference: 0~5, 높을수록 복잡 (보너스 + 미스매치 페널티)
     pref = query_filter.get("weight_pref")
     w = _as_number(item.get("weight"), default=None)
     if pref and w is not None:
         if pref == "light":
             score += max(0.0, (3.0 - w) / 3.0) * 6.0
-            # 무거운 게임이 가벼운 쿼리에 올라오면 거리 비례 감점
             if w >= 3.0:
                 score -= min((w - 2.5) * 4.0, 10.0)
         elif pref == "medium":
             score += max(0.0, 1.0 - abs(w - 3.0) / 2.0) * 6.0
         elif pref == "heavy":
             score += max(0.0, (w - 2.5) / 2.5) * 6.0
-            # 가벼운 게임이 무거운 쿼리에 올라오면 거리 비례 감점
             if w <= 2.5:
                 score -= min((3.0 - w) * 4.0, 10.0)
 
-    # 5. category_rank(Overall): 낮을수록 우수
     cr = item.get("category_rank")
     overall = None
     if isinstance(cr, dict):
@@ -455,18 +466,19 @@ def _metadata_weight(item: dict, query_filter: dict) -> float:
     elif isinstance(cr, str):
         try:
             cr_dict = json.loads(cr.replace("'", '"'))
-            overall = _as_number(cr_dict.get("Overall") or cr_dict.get("전략") or cr_dict.get("가족"), default=None)
+            overall = _as_number(
+                cr_dict.get("Overall") or cr_dict.get("전략") or cr_dict.get("가족"),
+                default=None,
+            )
         except Exception:
             overall = _as_number(cr, default=None)
     if overall is not None and overall > 0:
         score += max(0.0, 10.0 - math.log1p(overall) * 1.35)
 
-    # 6. rank: 낮을수록 우수
     rank = _as_number(item.get("rank"), default=None)
     if rank is not None and rank > 0:
         score += max(0.0, 5.0 - math.log1p(rank) * 0.75)
 
-    # 7. review_count: 리뷰 수 신뢰도 보정
     review_data = _get_review_data(item)
     if review_data:
         count = _as_number(review_data.get("review_count"), default=0) or 0
@@ -475,44 +487,62 @@ def _metadata_weight(item: dict, query_filter: dict) -> float:
 
     return score
 
+
 # -------------------------
 # 검색 내부 함수
 # -------------------------
 def _bm25_search(query_text: str, query_filter: dict, topk: int = 200) -> dict:
+    """BM25 키워드 검색 — 기존과 동일 (메모리 내 all_items 사용)."""
     tokens = [t for t in query_text.lower().split() if t not in BM25_STOPWORDS]
     scores = _bm25.get_scores(tokens)
     top_idx = np.argsort(scores)[::-1]
     results = {}
     rank = 0
     for idx in top_idx:
-        if idx >= len(all_items): continue
+        if idx >= len(all_items):
+            continue
         item = all_items[idx]
-        if not hard_filter(item, query_filter): continue
+        if not hard_filter(item, query_filter):
+            continue
         key = f"{item['source']}::{item.get('title', '')}"
         if key not in results:
             rank += 1
             results[key] = {"item": item, "rank": rank, "bm25_score": float(scores[idx])}
-            if rank >= topk: break
+            if rank >= topk:
+                break
     return results
 
 
 def _dense_search(query_vector: np.ndarray, query_filter: dict, topk: int = 200) -> dict:
-    """BGG + 보드라이프 각각 검색 후 l2_dist 기준 합산 정렬."""
+    """
+    Pinecone dense 검색 — BGG + 보드라이프 각각 query 후 score 기준 합산 정렬.
+    변경 전: faiss index.search() 사용
+    변경 후: pinecone index.query() 사용
+    """
     results = {}
-    for index, meta in [(bgg_index, bgg_stats), (bl_index, bl_stats)]:
-        if query_vector.shape[1] != index.d:
-            continue
-        D, I = index.search(query_vector, topk * 3)
-        for i, idx in enumerate(I[0]):
-            if idx < 0 or idx >= len(meta): continue
-            item = meta[idx]
-            if not hard_filter(item, query_filter): continue
+
+    for index, namespace, meta_list in [
+        (bgg_index, bgg_namespace, bgg_stats),
+        (bl_index,  bl_namespace,  bl_stats),
+    ]:
+        response = index.query(
+            vector=query_vector.tolist()[0],
+            top_k=topk * 3,
+            namespace=namespace,
+            include_metadata=True,
+        )
+        for match in response.matches:
+            item = dict(match.metadata or {})
+            item["source"] = "bgg" if namespace == bgg_namespace else "boardlife"
+            if not hard_filter(item, query_filter):
+                continue
             key = f"{item['source']}::{item.get('title', '')}"
             if key not in results:
-                results[key] = {"item": item, "l2_dist": float(D[0][i])}
+                # Pinecone은 유사도 score(높을수록 좋음) 반환 → l2_dist 대신 사용
+                results[key] = {"item": item, "score": float(match.score)}
 
-    # l2_dist 기준 재정렬 후 rank 부여
-    sorted_items = sorted(results.items(), key=lambda x: x[1]["l2_dist"])
+    # score 기준 내림차순 정렬 후 rank 부여
+    sorted_items = sorted(results.items(), key=lambda x: x[1]["score"], reverse=True)
     ranked = {}
     for rank, (key, data) in enumerate(sorted_items[:topk], 1):
         ranked[key] = {**data, "rank": rank}
@@ -526,13 +556,7 @@ def _rrf_fuse(
     topk: int,
     k: int = 60,
 ) -> list[dict]:
-    """
-    RRF 융합 + 메타 가중치 적용.
-
-    소스 가중치 (기획서 권장):
-      boardlife: RRF 점수 × 1.5
-      bgg:       RRF 점수 × 1.0
-    """
+    """RRF 융합 + 메타 가중치 적용."""
     all_keys = set(list(bm25_results.keys()) + list(dense_results.keys()))
     scored = []
     for key in all_keys:
@@ -545,70 +569,48 @@ def _rrf_fuse(
 
         rrf_score = 1 / (k + bm25_rank) + 1 / (k + dense_rank)
 
-        # dense 없을 때 BM25 단독 패널티
         if dense_rank == 999:
             rrf_score *= 0.7
 
         item = (bm25_data or dense_data)["item"]
-
-        # 소스 가중치: 한국어/한국 유저 반응 중심이면 boardlife 우선
         source_weight = _source_weight(item, query_filter)
         rrf_weighted  = rrf_score * source_weight
-
-        meta_score  = _metadata_weight(item, query_filter)
-        total_score = rrf_weighted * 3000 + meta_score
+        meta_score    = _metadata_weight(item, query_filter)
+        total_score   = rrf_weighted * 3000 + meta_score
 
         item_copy = item.copy()
-        item_copy["rrf_score"]    = round(rrf_score, 6)
-        item_copy["meta_score"]   = round(meta_score, 2)
-        item_copy["total_score"]  = round(total_score, 2)
-        item_copy["bm25_rank"]    = bm25_rank
-        item_copy["dense_rank"]   = dense_rank
+        item_copy["rrf_score"]     = round(rrf_score, 6)
+        item_copy["meta_score"]    = round(meta_score, 2)
+        item_copy["total_score"]   = round(total_score, 2)
+        item_copy["bm25_rank"]     = bm25_rank
+        item_copy["dense_rank"]    = dense_rank
         item_copy["source_weight"] = source_weight
         scored.append(item_copy)
 
     scored.sort(key=lambda x: x["total_score"], reverse=True)
-
-    # ── 에디션 중복 제거 ──
-    # 같은 게임의 다른 에디션(예: 7 Wonders / 7 Wonders Second Edition)이
-    # 동시에 추천되는 것을 방지한다. 점수가 높은 쪽만 유지.
     scored = _deduplicate_editions(scored)
-
     return scored[:topk]
 
 
 def _normalize_title_for_dedup(title: str) -> str:
-    """
-    에디션 중복 제거용 타이틀 정규화.
-    괄호, 'Second Edition', 'Revised Edition' 등 에디션 표기를 제거하고
-    소문자로 통일하여 동일 게임 여부를 비교한다.
-    """
     if not title:
         return ""
     normalized = title.lower().strip()
-    # 괄호 안 에디션 표기 제거: "7 Wonders (Second Edition)" → "7 Wonders"
     normalized = re.sub(r"\s*\([^)]*edition[^)]*\)", "", normalized, flags=re.IGNORECASE)
-    # 뒤에 붙는 에디션 표기 제거: "7 Wonders: Second Edition" → "7 Wonders"
     normalized = re.sub(
         r"\s*[:：\-–—]\s*(second|third|revised|new|anniversary|deluxe|ultimate)\s*edition.*$",
         "", normalized, flags=re.IGNORECASE,
     )
-    # 연도 표기 제거: "Carcassonne 2014" → "Carcassonne"
     normalized = re.sub(r"\s*\(\d{4}\)\s*$", "", normalized)
     return normalized.strip()
 
 
 def _deduplicate_editions(scored: list[dict]) -> list[dict]:
-    """
-    정렬된 scored 리스트에서 같은 게임의 에디션 중복을 제거한다.
-    이미 total_score 내림차순이므로 먼저 등장하는 쪽(고점)을 유지한다.
-    """
     seen_base_titles: dict[str, bool] = {}
     deduped: list[dict] = []
     for item in scored:
         title = item.get("title", "")
         base = _normalize_title_for_dedup(title)
-        # 같은 소스 내에서만 중복 제거 (BGG와 보드라이프는 별도 유지)
         dedup_key = f"{item.get('source', '')}::{base}"
         if dedup_key not in seen_base_titles:
             seen_base_titles[dedup_key] = True
@@ -622,18 +624,19 @@ def _deduplicate_editions(scored: list[dict]) -> list[dict]:
 def get_embedding(titles: list[str]) -> np.ndarray:
     """
     타이틀 리스트 → 평균 임베딩 벡터 반환 (shape: (1, dim)).
-    타이틀을 찾지 못하면 bgg 인덱스 0번 벡터 사용.
+    변경 전: faiss index.reconstruct()로 저장된 벡터 직접 추출
+    변경 후: get_query_embedding()으로 텍스트를 임베딩해 사용
+    타이틀을 못 찾으면 빈 쿼리 임베딩으로 fallback.
     """
-    embeddings = []
+    if not titles:
+        return get_query_embedding("보드게임", engine="openai")
+
+    vecs = []
     for title in titles:
-        for index, meta in [(bgg_index, bgg_stats), (bl_index, bl_stats)]:
-            for i, s in enumerate(meta):
-                if s.get("title") == title or s.get("title_eng") == title or s.get("name") == title:
-                    embeddings.append(index.reconstruct(i))
-                    break
-    if embeddings:
-        return np.mean(embeddings, axis=0).reshape(1, -1).astype(np.float32)
-    return bgg_index.reconstruct(0).reshape(1, -1).astype(np.float32)
+        vec = get_query_embedding(title, engine="openai")
+        vecs.append(vec)
+
+    return np.mean(vecs, axis=0).reshape(1, -1).astype(np.float32)
 
 
 # -------------------------
@@ -645,7 +648,7 @@ def retrieve(
     query_vector: np.ndarray,
     topk: int = 50,
 ) -> list[dict]:
-    """RRF 하이브리드 검색 (BM25 + FAISS 융합)."""
+    """RRF 하이브리드 검색 (BM25 + Pinecone 융합)."""
     bm25_res  = _bm25_search(query_text, query_filter, topk=200)
     dense_res = _dense_search(query_vector, query_filter, topk=200)
     return _rrf_fuse(bm25_res, dense_res, query_filter, topk=topk)

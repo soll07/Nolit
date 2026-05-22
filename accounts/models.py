@@ -12,7 +12,7 @@ class Persona(models.Model):
     CATEGORY_CHOICES = [
         ("boardgame",    "보드게임"),
         ("escape",       "방탈출"),
-        ("murdermystery","머더미스터리"),
+        ("murdermystery","크라임씬"),
     ]
 
     user               = models.OneToOneField(User, on_delete=models.CASCADE, related_name="persona")

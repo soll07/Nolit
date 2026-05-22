@@ -153,7 +153,7 @@ sources:
     csv_reviews    : "escape/bbabang_reviews_final.csv"
     index          : "faiss_bbabang_stats.index"
     meta           : "faiss_bbabang_stats_metadata.json"
-    pinecone_index : "nolit-escape-stats"
+    pinecone_index : "nolit-escape"
     namespace      : "bbabang_stats"
     use_ckpt       : false
     fuzzy          : true
@@ -164,7 +164,7 @@ sources:
     csv_reviews    : "escape/bbabang_reviews_final.csv"
     index          : "faiss_bbabang_reviews.index"
     meta           : "faiss_bbabang_reviews_metadata.json"
-    pinecone_index : "nolit-escape-reviews"
+    pinecone_index : "nolit-escape"
     namespace      : "bbabang_reviews"
     use_ckpt       : false
     fuzzy          : true

@@ -8,7 +8,7 @@ import traceback
 
 
 AI_FLOW = [
-    "안녕하세요! 그룹에 맞는 여가 활동을 추천해드리겠습니다.\n먼저, 어떤 활동을 원하시나요?· 보드게임 · 방탈출 · 머더미스터리",
+    "안녕하세요! 그룹에 맞는 여가 활동을 추천해드리겠습니다.\n먼저, 어떤 활동을 원하시나요?· 보드게임 · 방탈출 · 크라임씬",
     "몇 명이서 활동하실건가요?"
     "좋습니다! 처음 만나는 사이인가요, 아니면 이미 친한 사이인가요?\n관계에 따라 추천이 달라집니다.",
     "공포 요소에 대해 어떻게 생각하시나요?\n· 모두 괜찮음\n· 일부 민감함\n· 전체적으로 피하고 싶음",
@@ -45,15 +45,15 @@ SOURCE_TO_CATEGORY = {
     "bgg": "보드게임",
     "boardlife": "보드게임",
     "bbabang": "방탈출",
-    "murmynow": "머더미스터리",
-    "murdermysterylog": "머더미스터리",
+    "murmynow": "크라임씬",
+    "murdermysterylog": "크라임씬",
 }
 
 
 PIPELINE_CATEGORY_MAP = {
     "boardgame": "보드게임",
     "escape": "방탈출",
-    "murdermystery": "머더미스터리",
+    "murdermystery": "크라임씬",
 }
 
 
@@ -287,7 +287,7 @@ def smart_chat_api(request):
         domain_map = {
             "보드게임": "boardgame",
             "방탈출": "escape",
-            "머더미스터리": "murdermystery",
+            "크라임씬": "murdermystery",
         }
         category = domain_map.get(merged.get("domain"), "boardgame")
 

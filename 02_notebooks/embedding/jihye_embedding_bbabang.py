@@ -9,8 +9,8 @@ import faiss
 model = SentenceTransformer("jhgan/ko-sroberta-multitask")
 
 # ── 1. 데이터 로드 ──────────────────────────────────────────────
-df_stats = pd.read_csv("bbabang_stats_final.csv")
-df_reviews = pd.read_csv("bbabang_reviews_final.csv", low_memory=False)
+df_stats = pd.read_csv("../../01_data/escape/bbabang_stats_final.csv")
+df_reviews = pd.read_csv("../../01_data/escape/bbabang_reviews_final.csv", low_memory=False)
 
 print(f"stats: {len(df_stats)}개 / reviews: {len(df_reviews)}개")
 

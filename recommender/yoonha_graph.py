@@ -1308,7 +1308,9 @@ def node_retrieve(state: PipelineState) -> dict[str, Any]:
         }
 
     except Exception as exc:
-        # 데이터 없는 환경 (로컬 개발, CI 등) 에서도 파이프라인이 깨지지 않도록 처리
+        print(f"[DEBUG] node_retrieve 에러: {exc}")   # ← 이 줄 추가
+        import traceback
+        traceback.print_exc()                          # ← 이 줄 추가
         return {
             "retrieved_items": [],
             "retrieve_error": str(exc),
