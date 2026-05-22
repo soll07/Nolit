@@ -6,10 +6,31 @@
 
 보드게임 · 방탈출 · 머더미스터리 — 6개 소스에서 수집한 데이터를 통합하고, LangGraph 4단계 파이프라인으로 **"우리 그룹에 맞는 선택"** 을 추천합니다.
 
+<div align="center">
+  <table>
+    <tr>
+      <td align="center" width="50%">
+        <img
+          src="./assets/demo_landing.png"
+          alt="Nolit 메인"
+          style="width:100%; max-width:360px; height:300px; object-fit:contain;"
+        >
+      </td>
+      <td align="center" width="50%">
+        <img
+          src="./assets/demo_chat.png"
+          alt="AI 추천 화면"
+          style="width:100%; max-width:360px; height:300px; object-fit:contain;"
+        >
+      </td>
+    </tr>
+  </table>
+</div>
+
 <p align="center">
-  <img src="./assets/demo_landing.png" alt="Nolit 메인" height="300">
-  &nbsp;
-  <img src="./assets/demo_chat.png" alt="AI 추천 화면" height="300">
+  <a href="https://www.figma.com/board/PAr1wnUVCpQUZmT99oeX9h/NOLIT-%ED%99%94%EB%A9%B4-%ED%9D%90%EB%A6%84%EB%8F%84?node-id=0-1&p=f">
+    <img src="https://img.shields.io/badge/Figma-프로토타입-F24E1E?style=for-the-badge&logo=figma&logoColor=white" />
+  </a>
 </p>
 
 ---
